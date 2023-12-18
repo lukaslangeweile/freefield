@@ -80,7 +80,8 @@ class Speaker:
     analog_proc: str  # the processor to whose analog I/O the speaker is attached
     digital_proc: str  # the processor to whose digital I/O the speaker's LED is attached
     azimuth: float  # the azimuth angle of the speaker
-    elevation: float  # the azimuth angle of the speaker
+    elevation: float  # the elevation angle of the speaker
+    distance: float  # the distance of the speaker in cm
     digital_channel: int  # the int value of the bitmask for the digital channel to which the speakers LED is attached
     level: float = None  # the constant for level equalization
     filter: slab.Filter = None  # filter for equalizing the filters transfer function
@@ -105,8 +106,9 @@ def read_speaker_table():
     table = np.loadtxt(table_file, skiprows=1, delimiter=",", dtype=str)
     for row in table:
         speakers.append(Speaker(index=int(row[0]), analog_channel=int(row[1]), analog_proc=row[2],
-                                azimuth=float(row[3]), digital_channel=int(row[5]) if row[5] else None,
-                                elevation=float(row[4]), digital_proc=row[6] if row[6] else None))
+                                azimuth=float(row[3]), elevation=float(row[4]), distance=float(row[5]),
+                                digital_channel=int(row[5]) if row[5] else None,
+                                digital_proc=row[6] if row[6] else None))
     return speakers
 
 
@@ -237,7 +239,7 @@ def wait_for_button(proc="RP2", tag="response"):
 
 def pick_speakers(picks):
     """
-    Either return the speaker at given coordinates (azimuth, elevation) or the
+    Either return the speaker at given coordinates (azimuth, elevation, distance) or the
     speaker with a specific index number.
 
     Args:
@@ -252,13 +254,14 @@ def pick_speakers(picks):
         elif all(isinstance(p, (int, np.int64, np.int32)) for p in picks):
             speakers = [s for s in SPEAKERS if s.index in picks]
         else:
-            speakers = [s for s in SPEAKERS if (s.azimuth, s.elevation) in picks]
+            speakers = [s for s in SPEAKERS if (s.azimuth, s.elevation, s.distance) in picks]
     elif isinstance(picks, (int, np.int64, np.int32)):
         speakers = [s for s in SPEAKERS if s.index == picks]
     elif isinstance(picks, Speaker):
         speakers = [picks]
     else:
-        speakers = [s for s in SPEAKERS if (s.azimuth == picks[0] and s.elevation == picks[1])]
+        speakers = [s for s in SPEAKERS if (s.azimuth == picks[0] and s.elevation == picks[1])
+                    and s.distance == picks[2]]
     if len(speakers) == 0:
         print("no speaker found that matches the criterion - returning empty list")
     return speakers
@@ -269,7 +272,7 @@ def all_leds():
     return [s for s in SPEAKERS if s.digital_channel is not None]
 
 
-def shift_setup(delta_azi, delta_ele):
+def shift_setup(delta_azi, delta_ele, delta_dist):
     """
     Shift the setup (relative to the lister) by adding some delta value
     in azimuth and elevation. This can be used when chaning the position of
@@ -280,12 +283,14 @@ def shift_setup(delta_azi, delta_ele):
     Args:
         delta_azi (float): azimuth by which the setup is shifted, positive value means shifting right
         delta_ele (float): elevation by which the setup is shifted, positive value means shifting up
+        delta_dist (float): distance by which the setup is shifted, positive value means shifting away
     """
     # TODO: first convert to cartesian coordinates then move
     global SPEAKERS
     for speaker in SPEAKERS:
         speaker.azimuth += delta_azi  # azimuth
         speaker.elevation += delta_ele  # elevation
+        speaker.distance += delta_dist  # distance
     print(f"shifting the loudspeaker array by {delta_azi} in azimuth and {delta_ele} in elevation")
 
 
@@ -296,7 +301,8 @@ def set_signal_and_speaker(signal, speaker, equalize=True):
 
         Args:
             signal (array-like): signal to load to the buffer, must be one-dimensional
-            speaker (Speaker, int) : speaker to play the signal from, can be index number or [azimuth, elevation]
+            speaker (Speaker, int) : speaker to play the signal from,
+                can be index number or [azimuth, elevation, distance]
             equalize (bool): if True (=default) apply loudspeaker equalization
     """
     signal = slab.Sound(signal)
