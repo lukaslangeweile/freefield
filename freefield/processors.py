@@ -162,9 +162,9 @@ class Processors(object):
         elif model.upper() == 'RX8':
             connected = rp.ConnectRX8(connection, index)
         elif model.upper() == 'RM1':
-            connected = rp.ConnectRX8(connection, index)
+            connected = rp.ConnectRM1(connection, index)
         elif model.upper() == 'RX6':
-            connected = rp.ConnectRX8(connection, index)
+            connected = rp.ConnectRX6(connection, index)
         if not connected:
             logging.warning(f'Unable to connect to {model} processor!')
         else:  # connecting was successful, load circuit
