@@ -1,4 +1,4 @@
-index_number,channel,analog_proc,azi,ele,dep,bit,digital_proc
+index_number,channel,analog_proc,azi,ele,dist,bit,digital_proc
 0,22,RX82,-52.5,25,0,,
 1,19,RX82,-52.5,12.5,0,,
 2,20,RX82,-52.5,0,0,,

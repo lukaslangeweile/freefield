@@ -1,5 +1,5 @@
-index_number,channel,analog_proc,azi,ele,dep,bit,digital_proc
-0,1,RX8,0,0,100,,
-1,2,RX8,0,0,200,,
+index_number,channel,analog_proc,azi,ele,dist,aux,bit,,digital_proc
+0,1,RX8,0,0,0,1,,
+1,2,RX8,0,0,200,0,,
 
 

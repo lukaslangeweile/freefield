@@ -1,5 +1,6 @@
 import time
 from pathlib import Path
+import os
 import datetime
 from copy import deepcopy
 import pickle
@@ -291,7 +292,7 @@ def shift_setup(delta_azi, delta_ele, delta_dist):
         speaker.azimuth += delta_azi  # azimuth
         speaker.elevation += delta_ele  # elevation
         speaker.distance += delta_dist  # distance
-    print(f"shifting the loudspeaker array by {delta_azi} in azimuth and {delta_ele} in elevation")
+    print(f"shifting the loudspeaker array by {delta_azi} in azimuth, {delta_ele} in elevation and {delta_dist} in distance")
 
 
 def set_signal_and_speaker(signal, speaker, equalize=True):
@@ -312,7 +313,11 @@ def set_signal_and_speaker(signal, speaker, equalize=True):
         to_play = apply_equalization(signal, speaker)
     else:
         to_play = signal
-    PROCESSORS.write(tag='playbuflen', value=to_play.n_samples, processors=['RX81', 'RX82'])
+
+    if SETUP == 'cathedral':
+        PROCESSORS.write(tag='playbuflen', value=to_play.n_samples, processors=['RX8'])
+    else:
+        PROCESSORS.write(tag='playbuflen', value=to_play.n_samples, processors=['RX81', 'RX82'])
     PROCESSORS.write(tag='chan', value=speaker.analog_channel, processors=speaker.analog_proc)
     PROCESSORS.write(tag='data', value=to_play.data, processors=speaker.analog_proc)
     other_procs = set([s.analog_proc for s in SPEAKERS])
@@ -347,7 +352,7 @@ def play_and_record(speaker, sound, compensate_delay=True, compensate_attenuatio
     """
     write(tag="playbuflen", value=sound.n_samples, processors=["RX81", "RX82"])
     if compensate_delay:
-        n_delay = get_recording_delay(play_from="RX8", rec_from="RP2")
+        n_delay = get_recording_delay(distance=speaker.distance, play_from="RX8", rec_from="RP2")
         n_delay += 50  # make the delay a bit larger to avoid missing the sound's onset
     else:
         n_delay = 0
@@ -462,28 +467,60 @@ def equalize_speakers(speakers="all", reference_speaker=23, bandwidth=1 / 10, th
         file_name (string): Name of the file to store equalization parameters.
 
     """
-    if not PROCESSORS.mode == "play_rec":
-        PROCESSORS.initialize_default(mode="play_rec")
-    sound = slab.Sound.chirp(duration=0.1, from_frequency=low_cutoff, to_frequency=high_cutoff)
-    if speakers == "all":  # use the whole speaker table
-        speakers = SPEAKERS
+    if SETUP == 'cathedral':
+        PROCESSORS.initialize(device=["RX8", "RX8", DIR / "data" / "rcx" / "bi_rec_buf.rcx"])
+        if speakers == "all":
+            for i, speaker in SPEAKERS: #excluding speaker 0, the auxiliary speaker
+                if i!= 0:
+                    speakers[speaker - 1] = SPEAKERS[speaker]
+        else:
+            speakers = pick_speakers(picks=speakers)
+
+        pink_noise = slab.Sound.pinknoise()
+        uso = slab.Sound.tone() #placeholder
+        syllable = slab.Sound.tone() #placeholder
+        sentence = slab.Sound.tone() #placeholder
+        sounds = {"pink_noise": pink_noise,"uso": uso,"syllable": syllable,"sentence": sentence}
+        reference_speaker = pick_speakers(reference_speaker)[0]
+        dir_name = DIR / "data" / f'calibration_{SETUP}'
+        if dir_name.exists():
+            date = datetime.datetime.now().strftime("_%Y-%m-%d-%H-%M-%S")
+            dir_name.rename(dir_name.parent / (dir_name.stem + date + dir_name.suffix))
+        os.mkdir(dir_name)
+        for key, value in sounds.items():
+            equalization_levels = _level_equalization(speakers, value, reference_speaker,threshold)
+            equalization = {f"{speakers[i].index}": {"level": equalization_levels[i], "filter": filter_bank.channel(i)}
+                            for i in range(len(speakers))}
+            if file_name is None:
+                file_name = DIR / "data" / f'calibration_{SETUP}' / f'{key}.pkl'
+            else:
+                file_name = Path(file_name)
+            with open(file_name, 'wb') as f:  # save the newly recorded calibration
+                pickle.dump(equalization, f, pickle.HIGHEST_PROTOCOL)
+
     else:
-        speakers = pick_speakers(picks=speakers)
-    reference_speaker = pick_speakers(reference_speaker)[0]
-    equalization_levels = _level_equalization(speakers, sound, reference_speaker, threshold)
-    filter_bank, rec = _frequency_equalization(speakers, sound, reference_speaker, equalization_levels,
-                                               bandwidth, low_cutoff, high_cutoff, alpha, threshold)
-    equalization = {f"{speakers[i].index}": {"level": equalization_levels[i], "filter": filter_bank.channel(i)}
-                    for i in range(len(speakers))}
-    if file_name is None:  # use the default filename and rename teh existing file
-        file_name = DIR / 'data' / f'calibration_{SETUP}.pkl'
-    else:
-        file_name = Path(file_name)
-    if file_name.exists():  # move the old calibration to the log folder
-        date = datetime.datetime.now().strftime("_%Y-%m-%d-%H-%M-%S")
-        file_name.rename(file_name.parent / (file_name.stem + date + file_name.suffix))
-    with open(file_name, 'wb') as f:  # save the newly recorded calibration
-        pickle.dump(equalization, f, pickle.HIGHEST_PROTOCOL)
+        if not PROCESSORS.mode == "play_rec":
+            PROCESSORS.initialize_default(mode="play_rec")
+        sound = slab.Sound.chirp(duration=0.1, from_frequency=low_cutoff, to_frequency=high_cutoff)
+        if speakers == "all":  # use the whole speaker table
+            speakers = SPEAKERS
+        else:
+            speakers = pick_speakers(picks=speakers)
+        reference_speaker = pick_speakers(reference_speaker)[0]
+        equalization_levels = _level_equalization(speakers, sound, reference_speaker, threshold)
+        filter_bank, rec = _frequency_equalization(speakers, sound, reference_speaker, equalization_levels,
+                                                   bandwidth, low_cutoff, high_cutoff, alpha, threshold)
+        equalization = {f"{speakers[i].index}": {"level": equalization_levels[i], "filter": filter_bank.channel(i)}
+                        for i in range(len(speakers))}
+        if file_name is None:  # use the default filename and rename teh existing file
+            file_name = DIR / 'data' / f'calibration_{SETUP}.pkl'
+        else:
+            file_name = Path(file_name)
+        if file_name.exists():  # move the old calibration to the log folder
+            date = datetime.datetime.now().strftime("_%Y-%m-%d-%H-%M-%S")
+            file_name.rename(file_name.parent / (file_name.stem + date + file_name.suffix))
+        with open(file_name, 'wb') as f:  # save the newly recorded calibration
+            pickle.dump(equalization, f, pickle.HIGHEST_PROTOCOL)
 
 
 def _level_equalization(speakers, sound, reference_speaker, threshold):
