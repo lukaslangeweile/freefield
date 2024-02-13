@@ -58,7 +58,7 @@ def initialize(setup, default=None, device=None, zbus=True, connection="GB", cam
     if device is not None:
         PROCESSORS.initialize(device, zbus, connection)
     elif default is not None:
-        PROCESSORS.initialize_default(default)
+        PROCESSORS.initialize_default(setup, default)
     if camera is not None:
         CAMERAS = cameras.initialize('flir')
     if sensor_tracking:
@@ -315,7 +315,7 @@ def set_signal_and_speaker(signal, speaker, equalize=True):
         to_play = signal
 
     if SETUP == 'cathedral':
-        PROCESSORS.write(tag='playbuflen', value=to_play.n_samples, processors=['RX8'])
+        PROCESSORS.write(tag='playbuflen', value=to_play.n_samples, processors=['RX81'])
     else:
         PROCESSORS.write(tag='playbuflen', value=to_play.n_samples, processors=['RX81', 'RX82'])
     PROCESSORS.write(tag='chan', value=speaker.analog_channel, processors=speaker.analog_proc)
