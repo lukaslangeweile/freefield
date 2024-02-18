@@ -23,6 +23,7 @@ class Processors(object):
         self.processors = dict()
         self.mode = None
         self._zbus = None
+        self.rcx_dict = dict()
 
     def initialize(self, device, zbus=False, connection='GB'):
         logging.info('Initializing TDT device, this may take a moment ...')
@@ -48,6 +49,7 @@ class Processors(object):
             logging.debug(f"initializing {name} of type {model} with index {index}")
             self.processors[name] = self._initialize_proc(model, circuit,
                                                           connection, index)
+            self.rcx_dict.update[name] = circuit
         if zbus:
             self._zbus = self._initialize_zbus(connection)
         if self.mode is None:

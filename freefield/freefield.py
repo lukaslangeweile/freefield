@@ -306,23 +306,48 @@ def set_signal_and_speaker(signal, speaker, equalize=True):
                 can be index number or [azimuth, elevation, distance]
             equalize (bool): if True (=default) apply loudspeaker equalization
     """
+
+    n_buffer_dict = {"bi_play_buf.rcx": 2,
+                        "play_buf.rcx": 1,
+                        "play_buf_msl": 5,
+                        "cathedral_play_buf": 8}
+    circuit = os.path.basename(PROCESSORS.rcx_dict.get(speaker.analog_proc))
     signal = slab.Sound(signal)
     speaker = pick_speakers(speaker)[0]
+
     if equalize:
         logging.debug('Applying calibration.')  # apply level and frequency calibration
         to_play = apply_equalization(signal, speaker)
     else:
         to_play = signal
 
-    if SETUP == 'cathedral':
-        PROCESSORS.write(tag='playbuflen', value=to_play.n_samples, processors=['RX81'])
-    else:
-        PROCESSORS.write(tag='playbuflen', value=to_play.n_samples, processors=['RX81', 'RX82'])
-    PROCESSORS.write(tag='chan', value=speaker.analog_channel, processors=speaker.analog_proc)
-    PROCESSORS.write(tag='data', value=to_play.data, processors=speaker.analog_proc)
-    other_procs = set([s.analog_proc for s in SPEAKERS])
-    other_procs.remove(speaker.analog_proc)  # set the analog output of other processors to non existent number 99
-    PROCESSORS.write(tag='chan', value=99, processors=other_procs)
+    if n_buffer_dict.get(circuit) == 1:
+        if SETUP== "cathedral":
+            PROCESSORS.write(tag='playbuflen', value=to_play.n_samples, processors=['RX81'])
+        else:
+            PROCESSORS.write(tag='playbuflen', value=to_play.n_samples, processors=['RX81', 'RX82'])
+        PROCESSORS.write(tag='chan', value=speaker.analog_channel, processors=speaker.analog_proc)
+        PROCESSORS.write(tag='data', value=to_play.data, processors=speaker.analog_proc)
+        other_procs = set([s.analog_proc for s in SPEAKERS])
+        other_procs.remove(speaker.analog_proc)  # set the analog output of other processors to non existent number 99
+        PROCESSORS.write(tag='chan', value=99, processors=other_procs)
+
+    elif n_buffer_dict.get(circuit) > 1:
+        setting_successful = 0
+        for i in range(n_buffer_dict.get(circuit)):
+            if PROCESSORS.read(tag=f'data{i}', proc=speaker.analog_proc) == 0:
+                PROCESSORS.write(tag=f'chan{i}', value=speaker.analog_channel, processors=speaker.analog_proc)
+                PROCESSORS.write(tag=f'data{i}', value=to_play.data, processors=speaker.analog_proc)
+                setting_successful = 1
+                break
+        if setting_successful == 1:
+            logging.debug(f'Signal and Speaker were set successfully.')
+        else:
+            print(f'Signal and Speaker could not be set. Every buffer is already filled!')
+
+    elif n_buffer_dict.get(circuit) is None:
+        print(f'Function set_signal_and_speaker() only works with rcx-files from the "freefield/data/rcx" directory!')
+
 
 def set_speaker(speaker):
     speaker = pick_speakers(speaker)[0]
@@ -523,21 +548,50 @@ def equalize_speakers(speakers="all", reference_speaker=23, bandwidth=1 / 10, th
             pickle.dump(equalization, f, pickle.HIGHEST_PROTOCOL)
 
 
-def _level_equalization(speakers, sound, reference_speaker, threshold):
+def _level_equalization(speakers, sound, reference_speaker, threshold, algorithm="default"):
     """
     Record the signal from each speaker in the list and return the level of each
     speaker relative to the target speaker(target speaker must be in the list)
     """
-    target_recording = play_and_record(reference_speaker, sound, equalize=False)
+    target_recording = play_and_record(reference_speaker, sound, equalize=False, compensate_delay=True)
     recordings = []
+    equalization_levels = []
     for speaker in speakers:
-        recordings.append(play_and_record(speaker, sound, equalize=False))
-    recordings = slab.Sound(recordings)
-    recordings.data[:, np.logical_and(recordings.level > target_recording.level-threshold,
-                    recordings.level < target_recording.level+threshold)] = target_recording.data
-    equalization_levels = target_recording.level - recordings.level
-    recordings.data[:, recordings.level < threshold] = target_recording.data  # thresholding
-    return target_recording.level / recordings.level
+        recordings.append(play_and_record(speaker, sound, equalize=False, compensate_delay=True))
+
+
+    if algorithm == "default": #TODO: revise that section
+        recordings = slab.Sound(recordings)
+        recordings.data[:, np.logical_and(recordings.level > target_recording.level-threshold,
+                recordings.level < target_recording.level+threshold)] = target_recording.data
+        equalization_levels = target_recording.level - recordings.level
+        recordings.data[:, recordings.level < threshold] = target_recording.data  # thresholding
+        return target_recording.level / recordings.level
+
+    if algorithm == "RMS":
+        rms_recordings = [np.sqrt(np.mean(np.square(recording.data))) for recording in recordings]
+        rms_target_recording = np.sqrt(np.mean(np.square(target_recording.data)))
+        recordings_gain = []
+        for speaker in speakers:
+            stairs = slab.Staircase(start_val=speaker.level, n_reversals=3, step_sizes= [4,0.5])
+
+            gain = rms_target_recording - rms_recordings[speaker]
+            recordings_gain[speaker].data = recordings[speaker].data * pow(10, gain / 20)
+            equalization_levels[speaker] = speaker.level + recordings_gain[speaker].level - recordings.level[speaker]
+        return equalization_levels
+
+    if algorithm == "dBFS":
+        dbfs_recordings = [max(recording.data) for recording in recordings]
+        recordings_gain = []
+        dbfs_target_recording = max(target_recording.data)
+        for speaker in speakers:
+            gain = dbfs_target_recording - dbfs_recordings[speaker]
+            recordings_gain[speaker].data = recordings[speaker].data * pow(10, gain / 20)
+            equalization_levels[speaker] = (recordings_gain[speaker].level - recordings[speaker].level) + speaker.level
+        return equalization_levels
+
+    if algorithm == "LUFS":
+        return equalization_levels
 
 
 def _frequency_equalization(speakers, sound, reference_speaker, calibration_levels, bandwidth,
