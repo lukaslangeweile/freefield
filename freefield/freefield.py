@@ -311,8 +311,8 @@ def set_signal_and_speaker(signal, speaker, equalize=True):
 
     n_buffer_dict = {"bi_play_buf.rcx": 2,
                         "play_buf.rcx": 1,
-                        "play_buf_msl": 5,
-                        "cathedral_play_buf": 8}
+                        "play_buf_msl.rcx": 5,
+                        "cathedral_play_buf.rcx": 8}
     circuit = os.path.basename(PROCESSORS.rcx_dict.get(speaker.analog_proc))
     signal = slab.Sound(signal)
     speaker = pick_speakers(speaker)[0]
