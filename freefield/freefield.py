@@ -504,7 +504,7 @@ def equalize_speakers(speakers="all", algorithm="default", sound_type="pinknoise
         PROCESSORS.initialize_default(mode="play_rec")
     if sound_type == "pinknoise":
         sounds = []
-    elif sound_type == "uso"
+    elif sound_type == "uso":
         sounds = []
     elif sound_type == "syllable":
         sounds = []
@@ -572,20 +572,6 @@ def _level_equalization(speakers, sounds, reference_speaker, threshold, algorith
             equalization_levels_sounds[i] = speaker.level
         equalization_levels[speaker] = np.mean(equalization_levels_sounds)
     return equalization_levels
-
-    """if algorithm == "dBFS":
-        dbfs_recordings = [max(recording.data) for recording in recordings]
-        recordings_gain = []
-        dbfs_target_recording = max(target_recording.data)
-        for speaker in speakers:
-            gain = dbfs_target_recording - dbfs_recordings[speaker]
-            recordings_gain[speaker].data = recordings[speaker].data * pow(10, gain / 20)
-            equalization_levels[speaker] = (recordings_gain[speaker].level - recordings[speaker].level) + speaker.level
-        return equalization_levels
-
-    if algorithm == "LUFS":
-        return equalization_levels"""
-
 
 def _frequency_equalization(speakers, sound, reference_speaker, calibration_levels, bandwidth,
                             low_cutoff, high_cutoff, alpha, threshold):
