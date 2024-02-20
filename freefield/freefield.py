@@ -10,6 +10,8 @@ import numpy as np
 import slab
 from matplotlib import pyplot as plt
 from matplotlib.axes import Axes
+
+import freefield
 from freefield import DIR, Processors, cameras, motion_sensor
 
 logging.basicConfig(level=logging.INFO)
@@ -470,8 +472,8 @@ def apply_equalization(signal, speaker, level=True, frequency=True):
     return equalized_signal
 
 
-def equalize_speakers(speakers="all", reference_speaker=23, bandwidth=1 / 10, threshold=.3,
-                      low_cutoff=200, high_cutoff=16000, alpha=1.0, file_name=None):
+def equalize_speakers(speakers="all", algorithm="default", sound_type="pinknoise", reference_speaker=23,
+                      bandwidth=1 / 10, threshold=.3, low_cutoff=200, high_cutoff=16000, alpha=1.0, file_name=None):
     """
     Equalize the loudspeaker array in two steps. First: equalize over all
     level differences by a constant for each speaker. Second: remove spectral
@@ -492,95 +494,86 @@ def equalize_speakers(speakers="all", reference_speaker=23, bandwidth=1 / 10, th
         file_name (string): Name of the file to store equalization parameters.
 
     """
-    if SETUP == 'cathedral':
-        PROCESSORS.initialize(device=["RX8", "RX8", DIR / "data" / "rcx" / "bi_rec_buf.rcx"])
-        if speakers == "all":
-            for i, speaker in SPEAKERS: #excluding speaker 0, the auxiliary speaker
-                if i!= 0:
-                    speakers[speaker - 1] = SPEAKERS[speaker]
-        else:
-            speakers = pick_speakers(picks=speakers)
 
-        pink_noise = slab.Sound.pinknoise()
-        uso = slab.Sound.tone() #placeholder
-        syllable = slab.Sound.tone() #placeholder
-        sentence = slab.Sound.tone() #placeholder
-        sounds = {"pink_noise": pink_noise,"uso": uso,"syllable": syllable,"sentence": sentence}
-        reference_speaker = pick_speakers(reference_speaker)[0]
-        dir_name = DIR / "data" / f'calibration_{SETUP}'
-        if dir_name.exists():
-            date = datetime.datetime.now().strftime("_%Y-%m-%d-%H-%M-%S")
-            dir_name.rename(dir_name.parent / (dir_name.stem + date + dir_name.suffix))
-        os.mkdir(dir_name)
-        for key, value in sounds.items():
-            equalization_levels = _level_equalization(speakers, value, reference_speaker,threshold)
-            equalization = {f"{speakers[i].index}": {"level": equalization_levels[i], "filter": filter_bank.channel(i)}
-                            for i in range(len(speakers))}
-            if file_name is None:
-                file_name = DIR / "data" / f'calibration_{SETUP}' / f'{key}.pkl'
-            else:
-                file_name = Path(file_name)
-            with open(file_name, 'wb') as f:  # save the newly recorded calibration
-                pickle.dump(equalization, f, pickle.HIGHEST_PROTOCOL)
-
+    dir_name = DIR / "data" / f'calibration_{SETUP}'
+    if dir_name.exists():
+        date = datetime.datetime.now().strftime("_%Y-%m-%d-%H-%M-%S")
+        dir_name.rename(dir_name.parent / (dir_name.stem + date + dir_name.suffix))
+    os.mkdir(dir_name)
+    if not PROCESSORS.mode == "play_rec":
+        PROCESSORS.initialize_default(mode="play_rec")
+    if sound_type == "pinknoise":
+        sounds = []
+    elif sound_type == "uso"
+        sounds = []
+    elif sound_type == "syllable":
+        sounds = []
+    elif sound_type == "sentence":
+        sounds = []
     else:
-        if not PROCESSORS.mode == "play_rec":
-            PROCESSORS.initialize_default(mode="play_rec")
-        sound = slab.Sound.chirp(duration=0.1, from_frequency=low_cutoff, to_frequency=high_cutoff)
-        if speakers == "all":  # use the whole speaker table
-            speakers = SPEAKERS
-        else:
-            speakers = pick_speakers(picks=speakers)
-        reference_speaker = pick_speakers(reference_speaker)[0]
-        equalization_levels = _level_equalization(speakers, sound, reference_speaker, threshold)
-        filter_bank, rec = _frequency_equalization(speakers, sound, reference_speaker, equalization_levels,
-                                                   bandwidth, low_cutoff, high_cutoff, alpha, threshold)
-        equalization = {f"{speakers[i].index}": {"level": equalization_levels[i], "filter": filter_bank.channel(i)}
-                        for i in range(len(speakers))}
-        if file_name is None:  # use the default filename and rename teh existing file
-            file_name = DIR / 'data' / f'calibration_{SETUP}.pkl'
-        else:
-            file_name = Path(file_name)
-        if file_name.exists():  # move the old calibration to the log folder
-            date = datetime.datetime.now().strftime("_%Y-%m-%d-%H-%M-%S")
-            file_name.rename(file_name.parent / (file_name.stem + date + file_name.suffix))
-        with open(file_name, 'wb') as f:  # save the newly recorded calibration
-            pickle.dump(equalization, f, pickle.HIGHEST_PROTOCOL)
+        print(f'specified sound_type {sound_type} does not exist! Has to be either "pinknoise", "uso", "syllabe" '
+              f'or "sentence".')
+    if speakers == "all":  # use the whole speaker table
+        speakers = SPEAKERS
+    else:
+        speakers = pick_speakers(picks=speakers)
+    reference_speaker = pick_speakers(reference_speaker)[0]
+    equalization_levels = _level_equalization(speakers, sounds, reference_speaker, threshold, algorithm)
+    filter_bank, rec = _frequency_equalization(speakers, sounds, reference_speaker, equalization_levels,
+                                               bandwidth, low_cutoff, high_cutoff, alpha, threshold)
+    equalization = {f"{speakers[i].index}": {"level": equalization_levels[i], "filter": filter_bank.channel(i)}
+                    for i in range(len(speakers))}
+    if file_name is None:  # use the default filename and rename teh existing file
+        file_name = DIR / 'data' / f'calibration_{SETUP}.pkl'
+    else:
+        file_name = Path(file_name)
+    if file_name.exists():  # move the old calibration to the log folder
+        date = datetime.datetime.now().strftime("_%Y-%m-%d-%H-%M-%S")
+        file_name.rename(file_name.parent / (file_name.stem + date + file_name.suffix))
+    with open(file_name, 'wb') as f:  # save the newly recorded calibration
+        pickle.dump(equalization, f, pickle.HIGHEST_PROTOCOL)
 
 
-def _level_equalization(speakers, sound, reference_speaker, threshold, algorithm="default"):
+def _level_equalization(speakers, sounds, reference_speaker, threshold, algorithm="default"):
     """
     Record the signal from each speaker in the list and return the level of each
     speaker relative to the target speaker(target speaker must be in the list)
     """
-    target_recording = play_and_record(reference_speaker, sound, equalize=False, compensate_delay=True)
-    recordings = []
+
     equalization_levels = []
+    reference_recordings = []
+    for i, sound in sounds:
+        reference_recordings[i] = play_and_record(reference_speaker, sound, equalize=False,
+                                                  compensate_delay=True)
     for speaker in speakers:
-        recordings.append(play_and_record(speaker, sound, equalize=False, compensate_delay=True))
+        equalization_levels_sounds = []
+        for i, sound in sounds:
+            stairs = slab.Staircase(start_val=reference_speaker.level, n_reversals=2,
+                                    step_sizes=[5 * threshold, threshold])
+            for level in stairs:
+                speaker.level = level
+                recording = play_and_record(speaker, sound, equalize=False, compensate_delay=True)
+                if algorithm.lower() == "rms":
+                    rms_reference_recording = np.sqrt(np.mean(np.square(reference_recordings[sound].data)))
+                    rms_recording = np.sqrt(np.mean(np.square(recording.data)))
+                    if rms_recording.level > rms_reference_recording.level:
+                        stairs.add_response(1)
+                    else:
+                        stairs.add_respone(0)
+                elif algorithm.lower() == "dbfs":
+                    dbfs_reference_recording = max(reference_recordings[sound].data)
+                    dbfs_recording = max(recording.data)
+                    if dbfs_recording.level > dbfs_reference_recording.level:
+                        stairs.add_response(1)
+                    else:
+                        stairs.add_response(0)
+                elif algorithm.lower() == "lufs":
+                    lufs_reference_recording = 1234
+            equalization_levels_sounds[i] = speaker.level
+        equalization_levels[speaker] = np.mean(equalization_levels_sounds)
+    return equalization_levels
 
-
-    if algorithm == "default": #TODO: revise that section
-        recordings = slab.Sound(recordings)
-        recordings.data[:, np.logical_and(recordings.level > target_recording.level-threshold,
-                recordings.level < target_recording.level+threshold)] = target_recording.data
-        equalization_levels = target_recording.level - recordings.level
-        recordings.data[:, recordings.level < threshold] = target_recording.data  # thresholding
-        return target_recording.level / recordings.level
-
-    if algorithm == "RMS":
-        rms_recordings = [np.sqrt(np.mean(np.square(recording.data))) for recording in recordings]
-        rms_target_recording = np.sqrt(np.mean(np.square(target_recording.data)))
-        recordings_gain = []
-        for speaker in speakers:
-            stairs = slab.Staircase(start_val=speaker.level, n_reversals=3, step_sizes= [4,0.5])
-
-            gain = rms_target_recording - rms_recordings[speaker]
-            recordings_gain[speaker].data = recordings[speaker].data * pow(10, gain / 20)
-            equalization_levels[speaker] = speaker.level + recordings_gain[speaker].level - recordings.level[speaker]
-        return equalization_levels
-
-    if algorithm == "dBFS":
+    """if algorithm == "dBFS":
         dbfs_recordings = [max(recording.data) for recording in recordings]
         recordings_gain = []
         dbfs_target_recording = max(target_recording.data)
@@ -591,7 +584,7 @@ def _level_equalization(speakers, sound, reference_speaker, threshold, algorithm
         return equalization_levels
 
     if algorithm == "LUFS":
-        return equalization_levels
+        return equalization_levels"""
 
 
 def _frequency_equalization(speakers, sound, reference_speaker, calibration_levels, bandwidth,
