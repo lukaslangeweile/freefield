@@ -315,9 +315,9 @@ def set_signal_and_speaker(signal, speaker, equalize=True):
                         "play_buf.rcx": 1,
                         "play_buf_msl.rcx": 5,
                         "cathedral_play_buf.rcx": 8}
+    speaker = pick_speakers(speaker)[0]
     circuit = os.path.basename(PROCESSORS.rcx_dict.get(speaker.analog_proc))
     signal = slab.Sound(signal)
-    speaker = pick_speakers(speaker)[0]
 
     if equalize:
         logging.debug('Applying calibration.')  # apply level and frequency calibration

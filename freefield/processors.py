@@ -49,7 +49,7 @@ class Processors(object):
             logging.debug(f"initializing {name} of type {model} with index {index}")
             self.processors[name] = self._initialize_proc(model, circuit,
                                                           connection, index)
-            self.rcx_dict.update[name] = circuit
+            self.rcx_dict.update({name:circuit})
         if zbus:
             self._zbus = self._initialize_zbus(connection)
         if self.mode is None:
@@ -92,7 +92,7 @@ class Processors(object):
                              ['RX81', 'RX8', DIR/'data'/'rcx'/'bits.rcx'],
                              ['RX82', 'RX8', DIR/'data'/'rcx'/'bits.rcx']]
         elif mode.lower() == "cam_calibration":
-            if setup == "cathedral":x
+            if setup == "cathedral":
                 proc_list = [['RP2', 'RP2', DIR / 'data' / 'rcx' / 'button.rcx'],
                              ['RX81', 'RX8', DIR / 'data' / 'rcx' / 'bits.rcx']]
             else:
