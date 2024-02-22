@@ -49,7 +49,7 @@ class Processors(object):
             logging.debug(f"initializing {name} of type {model} with index {index}")
             self.processors[name] = self._initialize_proc(model, circuit,
                                                           connection, index)
-            self.rcx_dict.update({name:circuit})
+            self.rcx_dict[name] = str(circuit)
         if zbus:
             self._zbus = self._initialize_zbus(connection)
         if self.mode is None:
