@@ -92,7 +92,7 @@ class Processors(object):
                              ['RX81', 'RX8', DIR/'data'/'rcx'/'bits.rcx'],
                              ['RX82', 'RX8', DIR/'data'/'rcx'/'bits.rcx']]
         elif mode.lower() == "cam_calibration":
-            if setup == "cathedral":
+            if setup == "cathedral":x
                 proc_list = [['RP2', 'RP2', DIR / 'data' / 'rcx' / 'button.rcx'],
                              ['RX81', 'RX8', DIR / 'data' / 'rcx' / 'bits.rcx']]
             else:
