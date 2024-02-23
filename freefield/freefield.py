@@ -316,7 +316,7 @@ def set_signal_and_speaker(signal, speaker, equalize=True):
                         "play_buf_msl.rcx": 5,
                         "cathedral_play_buf.rcx": 8}
     speaker = pick_speakers(speaker)[0]
-    circuit = os.path.basename(Path(PROCESSORS.rcx_dict.get(speaker.analog_proc)))
+    circuit = os.path.basename(PROCESSORS.rcx_dict.get(speaker.analog_proc))
     signal = slab.Sound(signal)
 
     if equalize:
