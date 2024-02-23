@@ -316,6 +316,11 @@ def set_signal_and_speaker(signal, speaker, equalize=True):
                         "play_buf_msl.rcx": 5,
                         "cathedral_play_buf.rcx": 8}
     speaker = pick_speakers(speaker)[0]
+
+    if speaker.analog_proc is None:
+        print("Error: analog_proc is None for the given speaker.")
+        return
+
     circuit = os.path.basename(PROCESSORS.rcx_dict.get(speaker.analog_proc))
     signal = slab.Sound(signal)
 
