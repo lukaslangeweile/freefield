@@ -365,6 +365,16 @@ def set_speaker(speaker):
     other_procs.remove(speaker.analog_proc)  # set the analog output of other processors to non existent number 99
     PROCESSORS.write(tag='chan', value=99, processors=other_procs)
 
+def flush_buffers(processor):
+    n_buffer_dict = {"bi_play_buf.rcx": 2,
+                        "play_buf.rcx": 1,
+                        "play_buf_msl.rcx": 5,
+                        "cathedral_play_buf.rcx": 8}
+    circuit = os.path.basename(PROCESSORS.rcx_dict.get(processor))
+
+    for i in range(n_buffer_dict.get(circuit)):
+        PROCESSORS.write(tag=f"data{i}", value=0, processors=processor)
+
 def play_and_record(speaker, sound, compensate_delay=True, compensate_attenuation=False, equalize=True,
                     recording_samplerate=97656):
     """
@@ -395,6 +405,7 @@ def play_and_record(speaker, sound, compensate_delay=True, compensate_attenuatio
     set_signal_and_speaker(sound, speaker, equalize)
     play()
     wait_to_finish_playing()
+    flush_buffers(speaker.analog_proc)
     if PROCESSORS.mode == "play_rec":  # read the data from buffer and skip the first n_delay samples
         rec = read(tag='data', processor='RP2', n_samples=rec_n_samples + n_delay)[n_delay:]
         rec = slab.Sound(rec, samplerate=recording_samplerate)
