@@ -589,15 +589,15 @@ def _level_equalization(speakers, sounds, reference_speaker, threshold, algorith
 
     equalization_levels = []
     reference_recordings = []
-    for i, sound in sounds:
+    for i, sound in enumerate(sounds):
         reference_recordings[i] = play_and_record(reference_speaker, sound, equalize=False,
                                                   compensate_delay=True)
         if SETUP == "cathedral":  # otherwise reverb of previous sounds would disturb equalization
             time.sleep(2.7)
 
-    for speaker in speakers:
+    for i, speaker in enumerate(speakers):
         equalization_levels_sounds = []
-        for i, sound in sounds:
+        for j, sound in enumerate(sounds):
             stairs = slab.Staircase(start_val=reference_speaker.level, n_reversals=2,
                                     step_sizes=[5 * threshold, threshold])
             for level in stairs:
@@ -620,8 +620,8 @@ def _level_equalization(speakers, sounds, reference_speaker, threshold, algorith
                     stairs.add_response(0)
                 if SETUP == "cathedral":  # otherwise reverb of previous sounds would disturb equalization
                     time.sleep(2.7)
-            equalization_levels_sounds[i] = speaker.level
-        equalization_levels[speaker] = np.mean(equalization_levels_sounds)
+            equalization_levels_sounds[j] = speaker.level
+        equalization_levels[i] = np.mean(equalization_levels_sounds)
     return equalization_levels
 
 def _frequency_equalization(speakers, sound, reference_speaker, calibration_levels, bandwidth,
