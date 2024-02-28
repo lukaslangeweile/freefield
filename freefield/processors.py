@@ -43,7 +43,7 @@ class Processors(object):
                 else:
                     raise FileNotFoundError(f"{file} does not exist!")
         for name, model, circuit in device:
-            # advance index if a model appears more then once
+            # advance index if a model appears more than once
             models.append(model)
             index = Counter(models)[model]
             logging.debug(f"initializing {name} of type {model} with index {index}")

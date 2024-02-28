@@ -375,7 +375,7 @@ def flush_buffers(processor):
     for i in range(n_buffer_dict.get(circuit)):
         PROCESSORS.write(tag=f"data{i}", value=0, processors=processor)
 
-def play_and_record(speaker, sound, compensate_delay=True, compensate_attenuation=False, equalize=True,
+def play_and_record(speaker, sound, compensate_delay=True, compensate_attenuation=False, equalize=False,
                     recording_samplerate=97656):
     """
     Play the signal from a speaker and return the recording. Delay compensation
@@ -434,20 +434,20 @@ def play_and_record(speaker, sound, compensate_delay=True, compensate_attenuatio
     return rec
 
 
-def get_recording_delay(distance=1.4, sample_rate=48828, play_from=None, rec_from=None):
+def get_recording_delay(distance=140, sample_rate=48828, play_from=None, rec_from=None):
     """
         Calculate the delay it takes for played sound to be recorded. Depends
         on the distance of the microphone from the speaker and on the device
         digital-to-analog and analog-to-digital conversion delays.
 
         Args:
-            distance (float): distance between listener and speaker array in meters
+            distance (float): distance between listener and speaker array in centimeters
             sample_rate (int): sample rate under which the system is running
             play_from (str): processor used for digital to analog conversion
             rec_from (str): processor used for analog to digital conversion
 
     """
-    n_sound_traveling = int(distance / 343 * sample_rate)
+    n_sound_traveling = int(distance / 34.3 * sample_rate)
     if play_from:
         if play_from == "RX8":
             n_da = 24
