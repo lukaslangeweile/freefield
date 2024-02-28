@@ -143,7 +143,7 @@ class Processors(object):
             value = np.asarray(self.processors[proc].ReadTagV(tag, 0, n_samples))
         else:
             value = self.processors[proc].GetTagVal(tag)
-        logging.debug(f'Got {tag} from {proc}.')
+        logging.debug(f'Got {tag} = {value} from {proc}.')
         return value
 
     def halt(self):

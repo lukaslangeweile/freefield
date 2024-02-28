@@ -372,6 +372,8 @@ def flush_buffers(processor):
                         "cathedral_play_buf.rcx": 8}
     circuit = os.path.basename(PROCESSORS.rcx_dict.get(processor))
 
+    if n_buffer_dict.get(circuit) == 1:
+        PROCESSORS.write(tag="data", value=0, processors=processor)
     for i in range(n_buffer_dict.get(circuit)):
         PROCESSORS.write(tag=f"data{i}", value=0, processors=processor)
 
