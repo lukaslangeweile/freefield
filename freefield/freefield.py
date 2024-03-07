@@ -401,7 +401,7 @@ def play_and_record(speaker, sound, compensate_delay=True, compensate_attenuatio
     else:
         write(tag="playbuflen", value=sound.n_samples, processors=["RX81", "RX82"])
     if compensate_delay:
-        n_delay = get_recording_delay(distance=speaker.distance, play_from="RX8", rec_from="RP2")
+        n_delay = get_recording_delay(distance=speaker.distance, play_from="RX8", rec_from="RP2", sample_rate=recording_samplerate)
         n_delay += 50  # make the delay a bit larger to avoid missing the sound's onset
     else:
         n_delay = 0
@@ -436,7 +436,7 @@ def play_and_record(speaker, sound, compensate_delay=True, compensate_attenuatio
     return rec
 
 
-def get_recording_delay(distance=140, sample_rate=48828, play_from=None, rec_from=None):
+def get_recording_delay(distance=1.4, sample_rate=48828, play_from=None, rec_from=None):
     """
         Calculate the delay it takes for played sound to be recorded. Depends
         on the distance of the microphone from the speaker and on the device
@@ -449,7 +449,7 @@ def get_recording_delay(distance=140, sample_rate=48828, play_from=None, rec_fro
             rec_from (str): processor used for analog to digital conversion
 
     """
-    n_sound_traveling = int(distance / 34.3 * sample_rate)
+    n_sound_traveling = int((distance / 343) * sample_rate)
     if play_from:
         if play_from == "RX8":
             n_da = 24
