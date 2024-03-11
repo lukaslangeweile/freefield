@@ -499,16 +499,16 @@ def apply_equalization(signal, speaker, level=True, frequency=True):
         equalized_signal = speaker.filter.apply(equalized_signal)
     return equalized_signal
 
-def _get_sounds(sound_type, n_sounds=5):
+def _get_sounds(sound_type, n_sounds=1):
     sounds = []
     if sound_type == "pinknoise":
         sounds = [slab.Sound.pinknoise(duration=0.3) for i in range(n_sounds)]
     elif sound_type == "uso":
-        uso_dir = Path.resolve(DIR / "data" / "sounds" / "USOs")
+        uso_dir = DIR / "data" / "sounds" / "USOs"
         sound_files = [file for file in uso_dir.iterdir() if file.is_file()]
         sounds = [slab.Sound.read(file) for file in random.sample(sound_files, n_sounds)]
     elif sound_type == "syllable":
-        tts_numbers_dir = Path.resolve(DIR / "data" / "sounds" / "tts-numbers_n13_resamp_48828")
+        tts_numbers_dir = DIR / "data" / "sounds" / "tts-numbers_n13_resamp_48828"
         sound_files = [file for file in tts_numbers_dir.iterdir() if file.is_file()]
         sounds = [slab.Sound.read(file) for file in random.sample(sound_files, n_sounds)]
     elif sound_type == "sentence":
@@ -517,7 +517,7 @@ def _get_sounds(sound_type, n_sounds=5):
         raise ValueError(f'specified sound_type {sound_type} does not exist! Has to be either "pinknoise", "uso", '
                          f'"syllabe" or "sentence".')
     for sound in sounds:
-        sound.level = 70
+        sound.level = 90
     return sounds
 
 def equalize_speakers(speakers="all", algorithm="all", sound_type="all", reference_speaker=23, birec = True,
@@ -589,7 +589,7 @@ def equalize_speakers(speakers="all", algorithm="all", sound_type="all", referen
             else:
                 equalization = {f"{speakers[i].index}": {"level": equalization_levels[i]} for i in range(len(speakers))}
             if file_name is None:  # use the default filename and rename teh existing file
-                file_name = DIR / 'data' / f'calibration_{SETUP}.' / f'calibration_{SETUP}_{sound_type}_{algorithm}.pkl'
+                file_name = DIR / 'data' / f'calibration_{SETUP}' / f'calibration_{SETUP}_{sound_type}_{algorithm}.pkl'
             else:
                 file_name = Path(file_name)
             if file_name.exists():  # move the old calibration to the log folder
@@ -615,13 +615,13 @@ def _level_equalization(speakers, sounds, reference_speaker, algorithm, birec):
             time.sleep(2.7)
 
     for speaker in speakers:
-        if speker is reference_speaker:
-            equalization_levels.append(70)
+        if speaker is reference_speaker:
+            equalization_levels.append(90)
         else:
             equalization_levels_sounds = []
             for i, sound in enumerate(sounds):
                 logging.info(f"Starting equalization for speaker {speaker.index}, sound number {i}.")
-                stairs = slab.Staircase(start_val=65, n_reversals=10,
+                stairs = slab.Staircase(start_val=85, n_reversals=10,
                                         step_sizes=[5, 3, 1])
                 for level in stairs:
                     sound.level = level
