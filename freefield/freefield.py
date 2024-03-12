@@ -205,7 +205,7 @@ def halt():
     SENSOR.halt()
 
 
-def wait_to_finish_playing(proc="all", tag="playback"):
+def (proc="all", tag="playback"):
     """
     Busy wait until the device finished playing.
 
@@ -579,9 +579,9 @@ def equalize_speakers(speakers="all", algorithm="all", sound_type="all", birec =
 
         for algorithm in algorithm:
             logging.info(f"Starting equalization for sound_type {sound_type} and algorithm {algorithm}")
-            equalization_levels = _level_equalization(speakers, sounds, reference_speaker, algorithm, birec)
+            equalization_levels = _level_equalization(speakers, sounds, algorithm, birec)
             if frequency_equalization == True:
-                filter_bank, rec = _frequency_equalization(speakers, sounds, reference_speaker, equalization_levels,
+                filter_bank, rec = _frequency_equalization(speakers, sounds, equalization_levels,
                                                        bandwidth, low_cutoff, high_cutoff, alpha)
                 equalization = {f"{speakers[i].index}": {"level": equalization_levels[i], "filter": filter_bank.channel(i)}
                             for i in range(len(speakers))}
@@ -611,7 +611,7 @@ def _level_equalization(speakers, sounds, reference_speaker, algorithm, birec):
         equalization_levels_sounds = []
         for i, sound in enumerate(sounds):
             logging.info(f"Starting equalization for speaker {speaker.index}, sound number {i}.")
-            stairs = slab.Staircase(start_val=85, n_reversals=10,
+            stairs = slab.Staircase(start_val=70, n_reversals=10,
                                     step_sizes=[5, 3, 1])
             for level in stairs:
                 sound.level = level
