@@ -104,7 +104,7 @@ class Processors(object):
         self.mode = mode
         logging.debug(f'set mode to {mode}')
         if setup == "cathedral":
-            self.initialize(proc_list,False,"USB")
+            self.initialize(proc_list, False, "USB")
         else:
             self.initialize(proc_list, True, "GB")
 

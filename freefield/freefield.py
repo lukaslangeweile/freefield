@@ -205,7 +205,7 @@ def halt():
     SENSOR.halt()
 
 
-def (proc="all", tag="playback"):
+def wait_to_finish_playing(proc="all", tag="playback"):
     """
     Busy wait until the device finished playing.
 
@@ -517,7 +517,7 @@ def _get_sounds(sound_type, n_sounds=1):
         raise ValueError(f'specified sound_type {sound_type} does not exist! Has to be either "pinknoise", "uso", '
                          f'"syllabe" or "sentence".')
     for sound in sounds:
-        sound.level = 70
+        sound.level = 55
     return sounds
 
 def equalize_speakers(speakers="all", algorithm="all", sound_type="all", birec = True,
@@ -599,7 +599,7 @@ def equalize_speakers(speakers="all", algorithm="all", sound_type="all", birec =
             logging.info(f"Equalization for sound_type {sound_type} and algorithm {algorithm} finished.")
 
 
-def _level_equalization(speakers, sounds, reference_speaker, algorithm, birec):
+def _level_equalization(speakers, sounds, algorithm, birec):
     """
     Record the signal from each speaker in the list and return the level of each
     speaker relative to the target speaker(target speaker must be in the list)
@@ -614,12 +614,13 @@ def _level_equalization(speakers, sounds, reference_speaker, algorithm, birec):
             stairs = slab.Staircase(start_val=70, n_reversals=10,
                                     step_sizes=[5, 3, 1])
             for level in stairs:
-                sound.level = level
-                recording = play_and_record(speaker, sound, equalize=False, compensate_delay=True)
+                adapted_sound = sound
+                adapted_sound.level = level
+                recording = play_and_record(speaker, adapted_sound, equalize=False, compensate_delay=True)
                 sound_parameter, recording_parameter = _get_algorithm_parameters(algorithm, sound,
                                                             recording)
-
-                if recording_parameter > sound_parameter:
+                logging.debug(f'Level of played sound = {adapted_sound.level}')
+                if recording_parameter < sound_parameter:
                     stairs.add_response(1)
                 else:
                     stairs.add_response(0)
@@ -638,9 +639,12 @@ def _get_algorithm_parameters(algorithm, sound, recording):
         sound_parameter = max(sound.data)
         recording_parameter = max(recording.data)
     elif algorithm.lower() == "lufs":
-        meter_reference = pyloudnorm.Meter(sound.samplerate)
+        meter_sound = pyloudnorm.Meter(sound.samplerate)
         meter_recording = pyloudnorm.Meter(recording.samplerate)
-        sound_parameter = meter_reference.integrated_loudness(sound.data)
+        if sound.duration < 0.400:
+            meter_sound.block_size = 0.200
+            meter_recording.block_size = 0.200
+        sound_parameter = meter_sound.integrated_loudness(sound.data)
         recording_parameter = meter_recording.integrated_loudness(recording.data)
     else:
         logging.warning(f"There is no algorithm {algorithm}. Choose from RMS, dBFS or LUFS.")
