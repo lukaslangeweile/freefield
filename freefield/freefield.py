@@ -517,10 +517,10 @@ def _get_sounds(sound_type, n_sounds=1):
         raise ValueError(f'specified sound_type {sound_type} does not exist! Has to be either "pinknoise", "uso", '
                          f'"syllabe" or "sentence".')
     for sound in sounds:
-        sound.level = 90
+        sound.level = 70
     return sounds
 
-def equalize_speakers(speakers="all", algorithm="all", sound_type="all", reference_speaker=23, birec = True,
+def equalize_speakers(speakers="all", algorithm="all", sound_type="all", birec = True,
                       bandwidth=1 / 10, low_cutoff=200, high_cutoff=16000, alpha=1.0,
                       frequency_equalization = False, file_name=None):
     """
@@ -558,7 +558,6 @@ def equalize_speakers(speakers="all", algorithm="all", sound_type="all", referen
         speakers = SPEAKERS
     else:
         speakers = pick_speakers(picks=speakers)
-    reference_speaker = pick_speakers(reference_speaker)[0]
 
     dir_name = DIR / "data" / f'calibration_{SETUP}'
     dir_name.mkdir(parents=True, exist_ok=True)
@@ -607,55 +606,46 @@ def _level_equalization(speakers, sounds, reference_speaker, algorithm, birec):
     """
 
     equalization_levels = []
-    reference_recordings = []
-    for i, sound in enumerate(sounds):
-        reference_recordings.append(play_and_record(reference_speaker, sound, equalize=False,
-                                                  compensate_delay=True))
-        if SETUP == "cathedral":  # otherwise reverb of previous sounds would disturb equalization
-            time.sleep(2.7)
 
     for speaker in speakers:
-        if speaker is reference_speaker:
-            equalization_levels.append(90)
-        else:
-            equalization_levels_sounds = []
-            for i, sound in enumerate(sounds):
-                logging.info(f"Starting equalization for speaker {speaker.index}, sound number {i}.")
-                stairs = slab.Staircase(start_val=85, n_reversals=10,
-                                        step_sizes=[5, 3, 1])
-                for level in stairs:
-                    sound.level = level
-                    recording = play_and_record(speaker, sound, equalize=False, compensate_delay=True)
-                    reference_parameter, recording_parameter = _get_algorithm_parameters(algorithm, reference_recordings[i],
-                                                                recording)
+        equalization_levels_sounds = []
+        for i, sound in enumerate(sounds):
+            logging.info(f"Starting equalization for speaker {speaker.index}, sound number {i}.")
+            stairs = slab.Staircase(start_val=85, n_reversals=10,
+                                    step_sizes=[5, 3, 1])
+            for level in stairs:
+                sound.level = level
+                recording = play_and_record(speaker, sound, equalize=False, compensate_delay=True)
+                sound_parameter, recording_parameter = _get_algorithm_parameters(algorithm, sound,
+                                                            recording)
 
-                    if recording_parameter > reference_parameter:
-                        stairs.add_response(1)
-                    else:
-                        stairs.add_response(0)
-                    if SETUP == "cathedral":  # otherwise reverb of previous sounds would disturb equalization
-                        time.sleep(2.7)
-                equalization_levels_sounds.append(stairs.threshold())
-                logging.info(f"Equalization for speaker {speaker.index}, sound number {i} finished.")
-            equalization_levels.append(np.mean(equalization_levels_sounds))
+                if recording_parameter > sound_parameter:
+                    stairs.add_response(1)
+                else:
+                    stairs.add_response(0)
+                if SETUP == "cathedral":  # otherwise reverb of previous sounds would disturb equalization
+                    time.sleep(2.7)
+            equalization_levels_sounds.append(stairs.threshold())
+            logging.info(f"Equalization for speaker {speaker.index}, sound number {i} finished.")
+        equalization_levels.append(np.mean(equalization_levels_sounds))
     return equalization_levels
 
-def _get_algorithm_parameters(algorithm, reference_recording, recording):
+def _get_algorithm_parameters(algorithm, sound, recording):
     if algorithm.lower() == "rms":
-        reference_parameter = np.sqrt(np.mean(np.square(reference_recording.data)))
+        sound_parameter = np.sqrt(np.mean(np.square(sound.data)))
         recording_parameter = np.sqrt(np.mean(np.square(recording.data)))
     elif algorithm.lower() == "dbfs":
-        reference_parameter = max(reference_recording.data)
+        sound_parameter = max(sound.data)
         recording_parameter = max(recording.data)
     elif algorithm.lower() == "lufs":
-        meter_reference = pyloudnorm.Meter(reference_recording.samplerate)
+        meter_reference = pyloudnorm.Meter(sound.samplerate)
         meter_recording = pyloudnorm.Meter(recording.samplerate)
-        reference_parameter = meter_reference.integrated_loudness(reference_recording.data)
+        sound_parameter = meter_reference.integrated_loudness(sound.data)
         recording_parameter = meter_recording.integrated_loudness(recording.data)
     else:
         logging.warning(f"There is no algorithm {algorithm}. Choose from RMS, dBFS or LUFS.")
         return
-    return reference_parameter, recording_parameter
+    return sound_parameter, recording_parameter
 
 def _frequency_equalization(speakers, sound, reference_speaker, calibration_levels, bandwidth,
                             low_cutoff, high_cutoff, alpha, threshold):
