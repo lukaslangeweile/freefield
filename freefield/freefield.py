@@ -499,7 +499,7 @@ def apply_equalization(signal, speaker, level=True, frequency=True):
         equalized_signal = speaker.filter.apply(equalized_signal)
     return equalized_signal
 
-def _get_sounds(sound_type, n_sounds=1):
+def _get_sounds(sound_type, n_sounds=5):
     sounds = []
     if sound_type == "pinknoise":
         sounds = [slab.Sound.pinknoise(duration=0.3) for i in range(n_sounds)]
@@ -517,7 +517,7 @@ def _get_sounds(sound_type, n_sounds=1):
         raise ValueError(f'specified sound_type {sound_type} does not exist! Has to be either "pinknoise", "uso", '
                          f'"syllabe" or "sentence".')
     for sound in sounds:
-        sound.level = 55
+        sound.level = 65
     return sounds
 
 def equalize_speakers(speakers="all", algorithm="all", sound_type="all", birec = True,
@@ -579,14 +579,16 @@ def equalize_speakers(speakers="all", algorithm="all", sound_type="all", birec =
 
         for algorithm in algorithm:
             logging.info(f"Starting equalization for sound_type {sound_type} and algorithm {algorithm}")
-            equalization_levels = _level_equalization(speakers, sounds, algorithm, birec)
+
+            equalization_levels = _level_equalization(speakers[::-1], sounds, algorithm, birec)
             if frequency_equalization == True:
                 filter_bank, rec = _frequency_equalization(speakers, sounds, equalization_levels,
                                                        bandwidth, low_cutoff, high_cutoff, alpha)
                 equalization = {f"{speakers[i].index}": {"level": equalization_levels[i], "filter": filter_bank.channel(i)}
                             for i in range(len(speakers))}
             else:
-                equalization = {f"{speakers[i].index}": {"level": equalization_levels[i]} for i in range(len(speakers))}
+                equalization = {f"{speakers[len(speakers) - i - 1].index}": {"level": equalization_levels[i]} for i in
+                                range(len(speakers))}
             if file_name is None:  # use the default filename and rename teh existing file
                 file_name = DIR / 'data' / f'calibration_{SETUP}' / f'calibration_{SETUP}_{sound_type}_{algorithm}.pkl'
             else:
@@ -594,6 +596,7 @@ def equalize_speakers(speakers="all", algorithm="all", sound_type="all", birec =
             if file_name.exists():  # move the old calibration to the log folder
                 date = datetime.datetime.now().strftime("_%Y-%m-%d-%H-%M-%S")
                 file_name.rename(file_name.parent / (file_name.stem + date + file_name.suffix))
+                file_name = None
             with open(file_name, 'wb') as f:  # save the newly recorded calibration
                 pickle.dump(equalization, f, pickle.HIGHEST_PROTOCOL)
             logging.info(f"Equalization for sound_type {sound_type} and algorithm {algorithm} finished.")
@@ -611,16 +614,17 @@ def _level_equalization(speakers, sounds, algorithm, birec):
         equalization_levels_sounds = []
         for i, sound in enumerate(sounds):
             logging.info(f"Starting equalization for speaker {speaker.index}, sound number {i}.")
-            stairs = slab.Staircase(start_val=70, n_reversals=10,
+            stairs = slab.Staircase(start_val=(70 + speaker.index*2), n_reversals=10,
                                     step_sizes=[5, 3, 1])
             for level in stairs:
-                adapted_sound = sound
+                adapted_sound = slab.Sound(sound.data)
                 adapted_sound.level = level
                 recording = play_and_record(speaker, adapted_sound, equalize=False, compensate_delay=True)
                 sound_parameter, recording_parameter = _get_algorithm_parameters(algorithm, sound,
                                                             recording)
                 logging.debug(f'Level of played sound = {adapted_sound.level}')
-                if recording_parameter < sound_parameter:
+                logging.debug(f'recording_paramteter = {recording_parameter}, sound_parameter = {sound_parameter}')
+                if recording_parameter > sound_parameter:
                     stairs.add_response(1)
                 else:
                     stairs.add_response(0)
@@ -636,14 +640,14 @@ def _get_algorithm_parameters(algorithm, sound, recording):
         sound_parameter = np.sqrt(np.mean(np.square(sound.data)))
         recording_parameter = np.sqrt(np.mean(np.square(recording.data)))
     elif algorithm.lower() == "dbfs":
-        sound_parameter = max(sound.data)
-        recording_parameter = max(recording.data)
+        sound_parameter = np.max(np.abs(sound.data))
+        recording_parameter = np.max(np.abs(recording.data))
     elif algorithm.lower() == "lufs":
         meter_sound = pyloudnorm.Meter(sound.samplerate)
         meter_recording = pyloudnorm.Meter(recording.samplerate)
         if sound.duration < 0.400:
-            meter_sound.block_size = 0.200
-            meter_recording.block_size = 0.200
+            meter_sound.block_size = 0.100
+            meter_recording.block_size = 0.100
         sound_parameter = meter_sound.integrated_loudness(sound.data)
         recording_parameter = meter_recording.integrated_loudness(recording.data)
     else:
