@@ -117,7 +117,7 @@ def read_speaker_table():
     return speakers
 
 
-def load_equalization(file=None):
+def load_equalization(file=None, level=True, frequency=True):
     """
     Load a loudspeaker equalization from a pickle file and set the `level` and `filter` attribute of each speaker
         in the global speakers list.
@@ -135,8 +135,10 @@ def load_equalization(file=None):
             equalization = pickle.load(f)
         for index in equalization.keys():
             speaker = pick_speakers(picks=int(index))[0]
-            speaker.level = equalization[index]["level"]
-            speaker.filter = equalization[index]["filter"]
+            if level:
+                speaker.level = equalization[index]["level"]
+            if frequency:
+                speaker.filter = equalization[index]["filter"]
     else:
         raise FileNotFoundError(f"Could not load equalization file {file}!")
 
@@ -492,7 +494,7 @@ def apply_equalization(signal, speaker, level=True, frequency=True):
     if level:
         if speaker.level is None:
             raise ValueError("speaker not level-equalized! Load an existing equalization of calibrate the setup!")
-        equalized_signal.level += speaker.level
+        equalized_signal.level = speaker.level
     if frequency:
         if speaker.filter is None:
             raise ValueError("speaker not frequency-equalized! Load an existing equalization of calibrate the setup!")
@@ -596,10 +598,10 @@ def equalize_speakers(speakers="all", algorithm="all", sound_type="all", birec =
             if file_name.exists():  # move the old calibration to the log folder
                 date = datetime.datetime.now().strftime("_%Y-%m-%d-%H-%M-%S")
                 file_name.rename(file_name.parent / (file_name.stem + date + file_name.suffix))
-                file_name = None
             with open(file_name, 'wb') as f:  # save the newly recorded calibration
                 pickle.dump(equalization, f, pickle.HIGHEST_PROTOCOL)
             logging.info(f"Equalization for sound_type {sound_type} and algorithm {algorithm} finished.")
+            file_name = None
 
 
 def _level_equalization(speakers, sounds, algorithm, birec):
