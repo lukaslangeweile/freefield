@@ -345,6 +345,10 @@ def set_signal_and_speaker(signal, speaker, equalize=True):
 
     elif n_buffer_dict.get(circuit) > 1:
         setting_successful = 0
+        if SETUP== "cathedral":
+            PROCESSORS.write(tag='playbuflen', value=to_play.n_samples, processors=['RX81'])
+        else:
+            PROCESSORS.write(tag='playbuflen', value=to_play.n_samples, processors=['RX81', 'RX82'])
         for i in range(n_buffer_dict.get(circuit)):
             if PROCESSORS.read(tag=f'data{i}', proc=speaker.analog_proc) == 0:
                 PROCESSORS.write(tag=f'chan{i}', value=speaker.analog_channel, processors=speaker.analog_proc)
@@ -374,6 +378,7 @@ def flush_buffers(processor):
                         "cathedral_play_buf.rcx": 8}
     circuit = os.path.basename(PROCESSORS.rcx_dict.get(processor))
 
+    PROCESSORS.write(tag="playbuflen", value=1, processors=processor)
     if n_buffer_dict.get(circuit) == 1:
         PROCESSORS.write(tag="data", value=0, processors=processor)
     else:
