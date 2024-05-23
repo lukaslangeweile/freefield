@@ -371,7 +371,7 @@ def set_speaker(speaker):
     other_procs.remove(speaker.analog_proc)  # set the analog output of other processors to non existent number 99
     PROCESSORS.write(tag='chan', value=99, processors=other_procs)
 
-def flush_buffers(processor):
+def flush_buffers(processor, maximum_n_samples=80000):
     n_buffer_dict = {"bi_play_buf.rcx": 2,
                         "play_buf.rcx": 1,
                         "play_buf_msl.rcx": 5,
@@ -380,7 +380,7 @@ def flush_buffers(processor):
 
     PROCESSORS.write(tag="playbuflen", value=1, processors=processor)
     if n_buffer_dict.get(circuit) == 1:
-        PROCESSORS.write(tag="data", value=0, processors=processor)
+        PROCESSORS.write(tag="data", value=np.zeros(maximum_n_samples), processors=processor)
     else:
         for i in range(n_buffer_dict.get(circuit)):
             PROCESSORS.write(tag=f"data{i}", value=0, processors=processor)
