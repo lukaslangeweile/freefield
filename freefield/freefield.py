@@ -383,7 +383,7 @@ def flush_buffers(processor, maximum_n_samples=80000):
         PROCESSORS.write(tag="data", value=np.zeros(maximum_n_samples), processors=processor)
     else:
         for i in range(n_buffer_dict.get(circuit)):
-            PROCESSORS.write(tag=f"data{i}", value=0, processors=processor)
+            PROCESSORS.write(tag=f"data{i}", value=np.zeros(maximum_n_samples), processors=processor)
 
 def play_and_record(speaker, sound, compensate_delay=True, compensate_attenuation=False, equalize=False,
                     recording_samplerate=97656):
