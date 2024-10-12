@@ -31,9 +31,9 @@ def initialize(setup, default=None, device=None, zbus=True, connection="GB", cam
     the setup runs until `halt()` is called. Initialzing device which are already running will flush them.
 
     Arguments:
-        setup (str): which setup to load, can be 'dome' or 'arc'
+        setup (str): which setup to load, can be 'dome', 'arc' or 'cathedral'
         default (str | None): initialize the setup using one of the default settings which are:
-            'play_rec': play sounds using two RX8s and record them with a RP2
+            'play_rec': play sounds using two RX8s (or one RX8 in case of the cathedral setup) and record them with a RP2
             'play_birec': same as 'play_rec' but record from two microphone channels
             'loctest_freefield': sound localization test under freefield conditions
             'loctest_headphones': localization test with headphones
@@ -86,7 +86,7 @@ class Speaker:
     digital_proc: str  # the processor to whose digital I/O the speaker's LED is attached
     azimuth: float  # the azimuth angle of the speaker
     elevation: float  # the elevation angle of the speaker
-    distance: float  # the distance of the speaker in cm
+    distance: float  # the distance of the speaker in m
     digital_channel: int  # the int value of the bitmask for the digital channel to which the speakers LED is attached
     level: float = None  # the constant for level equalization
     filter: slab.Filter = None  # filter for equalizing the filters transfer function
@@ -282,7 +282,7 @@ def all_leds():
 def shift_setup(delta_azi, delta_ele, delta_dist):
     """
     Shift the setup (relative to the lister) by adding some delta value
-    in azimuth and elevation. This can be used when chaning the position of
+    in azimuth and elevation. This can be used when changing the position of
     the chair where the listener is sitting - moving the chair to the right
     is equivalent to shifting the setup to the left. Changes are not saved to
     the speaker table.
@@ -301,67 +301,32 @@ def shift_setup(delta_azi, delta_ele, delta_dist):
     print(f"shifting the loudspeaker array by {delta_azi} in azimuth, {delta_ele} in elevation and {delta_dist} in distance")
 
 
-def set_signal_and_speaker(signal, speaker, equalize=True):
+def set_signal_and_speaker(signal, speaker, equalize=True, data_tag='data', chan_tag='chan', n_samples_tag='playbuflen'):
     """
     Load a signal into the processor buffer and set the output channel to match the speaker.
     The processor is chosen automatically depending on the speaker.
 
         Args:
             signal (array-like): signal to load to the buffer, must be one-dimensional
-            speaker (Speaker, int) : speaker to play the signal from,
-                can be index number or [azimuth, elevation, distance]
+            speaker (Speaker, int) : speaker to play the signal from, can be index number or [azimuth, elevation]
             equalize (bool): if True (=default) apply loudspeaker equalization
+            data_tag ('string'): Name of the tag feeding into the signal buffer
+            chan_tag ('string'): Name of the tag setting the output channel number
+            play_tag ('string'): Name of the tag connected to the playback switch
     """
-
-    n_buffer_dict = {"bi_play_buf.rcx": 2,
-                        "play_buf.rcx": 1,
-                        "play_buf_msl.rcx": 5,
-                        "cathedral_play_buf.rcx": 8}
-    speaker = pick_speakers(speaker)[0]
-
-    if speaker.analog_proc is None:
-        print("Error: analog_proc is None for the given speaker.")
-        return
-
-    circuit = os.path.basename(PROCESSORS.rcx_dict.get(speaker.analog_proc))
     signal = slab.Sound(signal)
-
+    speaker = pick_speakers(speaker)[0]
     if equalize:
-        logging.debug('Applying calibration.')  # apply level and frequency calibration
+        logging.info('Applying calibration.')  # apply level and frequency calibration
         to_play = apply_equalization(signal, speaker)
     else:
         to_play = signal
-
-    if n_buffer_dict.get(circuit) == 1:
-        if SETUP== "cathedral":
-            PROCESSORS.write(tag='playbuflen', value=to_play.n_samples, processors=['RX81'])
-        else:
-            PROCESSORS.write(tag='playbuflen', value=to_play.n_samples, processors=['RX81', 'RX82'])
-        PROCESSORS.write(tag='chan', value=speaker.analog_channel, processors=speaker.analog_proc)
-        PROCESSORS.write(tag='data', value=to_play.data, processors=speaker.analog_proc)
-        other_procs = set([s.analog_proc for s in SPEAKERS])
-        other_procs.remove(speaker.analog_proc)  # set the analog output of other processors to non existent number 99
-        PROCESSORS.write(tag='chan', value=99, processors=other_procs)
-
-    elif n_buffer_dict.get(circuit) > 1:
-        setting_successful = 0
-        if SETUP== "cathedral":
-            PROCESSORS.write(tag='playbuflen', value=to_play.n_samples, processors=['RX81'])
-        else:
-            PROCESSORS.write(tag='playbuflen', value=to_play.n_samples, processors=['RX81', 'RX82'])
-        for i in range(n_buffer_dict.get(circuit)):
-            if PROCESSORS.read(tag=f'data{i}', proc=speaker.analog_proc) == 0:
-                PROCESSORS.write(tag=f'chan{i}', value=speaker.analog_channel, processors=speaker.analog_proc)
-                PROCESSORS.write(tag=f'data{i}', value=to_play.data, processors=speaker.analog_proc)
-                setting_successful = 1
-                break
-        if setting_successful == 1:
-            logging.debug(f'Signal and Speaker were set successfully.')
-        else:
-            print(f'Signal and Speaker could not be set. Every buffer is already filled!')
-
-    elif n_buffer_dict.get(circuit) is None:
-        print(f'Function set_signal_and_speaker() only works with rcx-files from the "freefield/data/rcx" directory!')
+    PROCESSORS.write(tag=n_samples_tag, value=to_play.n_samples, processors=['RX81', 'RX82'])
+    PROCESSORS.write(tag=chan_tag, value=speaker.analog_channel, processors=speaker.analog_proc)
+    PROCESSORS.write(tag=data_tag, value=to_play.data, processors=speaker.analog_proc)
+    other_procs = set([s.analog_proc for s in SPEAKERS])
+    other_procs.remove(speaker.analog_proc)  # set the analog output of other processors to non existent number 99
+    PROCESSORS.write(tag=chan_tag, value=99, processors=other_procs)
 
 
 def set_speaker(speaker):
@@ -443,14 +408,15 @@ def play_and_record(speaker, sound, compensate_delay=True, compensate_attenuatio
     return rec
 
 
-def get_recording_delay(distance=1.4, sample_rate=48828, play_from=None, rec_from=None):
+def get_recording_delay(distance, sample_rate=48828, play_from=None, rec_from=None):
     """
         Calculate the delay it takes for played sound to be recorded. Depends
         on the distance of the microphone from the speaker and on the device
         digital-to-analog and analog-to-digital conversion delays.
 
         Args:
-            distance (float): distance between listener and speaker array in centimeters
+            distance (float): distance between listener and speaker array, typically provided by the distance attribute
+            of the speaker (speaker.distance)
             sample_rate (int): sample rate under which the system is running
             play_from (str): processor used for digital to analog conversion
             rec_from (str): processor used for analog to digital conversion
@@ -505,36 +471,15 @@ def apply_equalization(signal, speaker, level=True, frequency=True):
         equalized_signal = speaker.filter.apply(equalized_signal)
     return equalized_signal
 
-def _get_sounds(sound_type, n_sounds=5):
-    sounds = []
-    if sound_type == "pinknoise":
-        sounds = [slab.Sound.pinknoise(duration=0.3) for i in range(n_sounds)]
-    elif sound_type == "uso":
-        uso_dir = DIR / "data" / "sounds" / "USOs"
-        sound_files = [file for file in uso_dir.iterdir() if file.is_file()]
-        sounds = [slab.Sound.read(file) for file in random.sample(sound_files, n_sounds)]
-    elif sound_type == "syllable":
-        tts_numbers_dir = DIR / "data" / "sounds" / "tts-numbers_n13_resamp_48828"
-        sound_files = [file for file in tts_numbers_dir.iterdir() if file.is_file()]
-        sounds = [slab.Sound.read(file) for file in random.sample(sound_files, n_sounds)]
-    elif sound_type == "sentence":
-        sounds = [slab.Sound.pinknoise(duration=0.3) for i in range(n_sounds)]  # placeholder
-    else:
-        raise ValueError(f'specified sound_type {sound_type} does not exist! Has to be either "pinknoise", "uso", '
-                         f'"syllabe" or "sentence".')
-    for sound in sounds:
-        sound.level = 65
-    return sounds
 
-def equalize_speakers(speakers="all", algorithm="all", sound_type="all", birec = True,
-                      bandwidth=1 / 10, low_cutoff=200, high_cutoff=16000, alpha=1.0,
-                      frequency_equalization = False, file_name=None):
+def equalize_speakers(speakers="all", reference_speaker=23, bandwidth=1 / 10, threshold=.3,
+                      low_cutoff=200, high_cutoff=16000, alpha=1.0, file_name=None):
     """
     Equalize the loudspeaker array in two steps. First: equalize over all
     level differences by a constant for each speaker. Second: remove spectral
     difference by inverse filtering. For more details on how the
     inverse filters are computed see the documentation of slab.Filter.equalizing_filterbank
-    # TODO: update documentation text
+
     Args:
         speakers (list, string): Select speakers for equalization. Can be a list of speaker indices or 'all'
         reference_speaker: Select speaker for reference level and frequency response
@@ -549,63 +494,28 @@ def equalize_speakers(speakers="all", algorithm="all", sound_type="all", birec =
         file_name (string): Name of the file to store equalization parameters.
 
     """
-
-    if algorithm == "all":
-        algorithm = ["rms", "dbfs", "lufs"]
-    elif isinstance(algorithm, str):
-        algorithm = [algorithm]
-
-    if sound_type == "all":
-        sound_type = ["pinknoise", "uso", "syllable", "sentence"]
-    elif isinstance(sound_type, str):
-        sound_type = [sound_type]
-
+    if not PROCESSORS.mode == "play_rec":
+        PROCESSORS.initialize_default(mode="play_rec")
+    sound = slab.Sound.chirp(duration=0.1, from_frequency=low_cutoff, to_frequency=high_cutoff)
     if speakers == "all":  # use the whole speaker table
         speakers = SPEAKERS
     else:
         speakers = pick_speakers(picks=speakers)
-
-    dir_name = DIR / "data" / f'calibration_{SETUP}'
-    dir_name.mkdir(parents=True, exist_ok=True)
-
-    if birec and PROCESSORS.mode is not "play_birec":
-        PROCESSORS.initialize_default(mode="play_birec", setup=SETUP)
-    elif not birec and PROCESSORS.mode is not "play_rec":
-        PROCESSORS.initialize_default(mode="play_rec", setup=SETUP)
-    for sound_type in sound_type:
-        try:
-            sounds = _get_sounds(sound_type)
-        except ValueError as e:
-            print(e)
-            return
-
-        filter_band = slab.Filter.band(frequency=(low_cutoff, high_cutoff), kind='bp')
-        for sound in sounds:
-            sound = filter_band.apply(sound)
-
-        for algorithm in algorithm:
-            logging.info(f"Starting equalization for sound_type {sound_type} and algorithm {algorithm}")
-
-            equalization_levels = _level_equalization(speakers[::-1], sounds, algorithm, birec)
-            if frequency_equalization == True:
-                filter_bank, rec = _frequency_equalization(speakers, sounds, equalization_levels,
-                                                       bandwidth, low_cutoff, high_cutoff, alpha)
-                equalization = {f"{speakers[i].index}": {"level": equalization_levels[i], "filter": filter_bank.channel(i)}
-                            for i in range(len(speakers))}
-            else:
-                equalization = {f"{speakers[len(speakers) - i - 1].index}": {"level": equalization_levels[i]} for i in
-                                range(len(speakers))}
-            if file_name is None:  # use the default filename and rename teh existing file
-                file_name = DIR / 'data' / f'calibration_{SETUP}' / f'calibration_{SETUP}_{sound_type}_{algorithm}.pkl'
-            else:
-                file_name = Path(file_name)
-            if file_name.exists():  # move the old calibration to the log folder
-                date = datetime.datetime.now().strftime("_%Y-%m-%d-%H-%M-%S")
-                file_name.rename(file_name.parent / (file_name.stem + date + file_name.suffix))
-            with open(file_name, 'wb') as f:  # save the newly recorded calibration
-                pickle.dump(equalization, f, pickle.HIGHEST_PROTOCOL)
-            logging.info(f"Equalization for sound_type {sound_type} and algorithm {algorithm} finished.")
-            file_name = None
+    reference_speaker = pick_speakers(reference_speaker)[0]
+    equalization_levels = _level_equalization(speakers, sound, reference_speaker, threshold)
+    filter_bank, rec = _frequency_equalization(speakers, sound, reference_speaker, equalization_levels,
+                                               bandwidth, low_cutoff, high_cutoff, alpha, threshold)
+    equalization = {f"{speakers[i].index}": {"level": equalization_levels[i], "filter": filter_bank.channel(i)}
+                    for i in range(len(speakers))}
+    if file_name is None:  # use the default filename and rename teh existing file
+        file_name = DIR / 'data' / f'calibration_{SETUP}.pkl'
+    else:
+        file_name = Path(file_name)
+    if file_name.exists():  # move the old calibration to the log folder
+        date = datetime.datetime.now().strftime("_%Y-%m-%d-%H-%M-%S")
+        file_name.rename(file_name.parent / (file_name.stem + date + file_name.suffix))
+    with open(file_name, 'wb') as f:  # save the newly recorded calibration
+        pickle.dump(equalization, f, pickle.HIGHEST_PROTOCOL)
 
 
 def _level_equalization(speakers, sounds, algorithm, birec):
@@ -974,7 +884,7 @@ def localization_test_headphones(speakers, signals, n_reps=1, n_images=5, visual
             write(tag="bitmask", value=0, processors=speaker.digital_proc)
         seq.add_response(pose)
     play_start_sound()
-    # change conditions property so it contains the only azimuth and elevation of the source
+    # change conditions property, so it contains the only azimuth and elevation of the source
     seq.conditions = np.array([(s.azimuth, s.elevation) for s in seq.conditions])
     return seq
 
