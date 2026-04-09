@@ -1,3 +1,4 @@
+import copy
 import time
 from pathlib import Path
 import os
@@ -25,13 +26,14 @@ SENSOR = motion_sensor.Sensor()
 SPEAKERS = []  # list of all the loudspeakers in the active setup
 SETUP = ""  # the currently active setup - "dome" or "arc"
 
-def initialize(setup, default=None, device=None, zbus=True, connection="GB", camera=None, sensor_tracking=False):
+def initialize(setup, default=None, device=None, zbus=True, connection="GB", camera=None, sensor_tracking=False,
+               calibration_file=None):
     """
     Initialize the device and load table (and calibration) for the selected setup. Once initialized,
     the setup runs until `halt()` is called. Initialzing device which are already running will flush them.
 
     Arguments:
-        setup (str): which setup to load, can be 'dome', 'arc' or 'cathedral'
+        setup (str): which setup to load, can be 'dome', 'arc', 'cathedral' or 'headphones'
         default (str | None): initialize the setup using one of the default settings which are:
             'play_rec': play sounds using two RX8s (or one RX8 in case of the cathedral setup) and record them with a RP2
             'play_birec': same as 'play_rec' but record from two microphone channels
@@ -57,8 +59,8 @@ def initialize(setup, default=None, device=None, zbus=True, connection="GB", cam
     global PROCESSORS, CAMERAS, SETUP, SPEAKERS, SENSOR
     # initialize device
     SETUP = setup
-    if bool(device) == bool(default):
-        raise ValueError("You have to specify a device OR a default_mode")
+    # if bool(device) == bool(default):
+    #     raise ValueError("You have to specify a device OR a default_mode")
     if device is not None:
         PROCESSORS.initialize(device, zbus, connection)
     elif default is not None:
@@ -69,9 +71,9 @@ def initialize(setup, default=None, device=None, zbus=True, connection="GB", cam
         SENSOR.connect()
     SPEAKERS = read_speaker_table()  # load the table containing the information about the loudspeakers
     try:
-        load_equalization()  # load the default equalization
+        load_equalization(calibration_file)  # load the default equalization
     except FileNotFoundError:
-        print("Could not load loudspeaker equalization! Use 'load_equalization' or 'equalize_speakers' \n"
+        logging.warning("Could not load loudspeaker equalization! Use 'load_equalization' or 'equalize_speakers' \n"
               "to load an existing equalization or measure and compute a new one.")
 
 
@@ -196,7 +198,6 @@ def play(kind='zBusA', proc=None):
         proc (None, str): Processor to trigger. Only needed if a software trigger is used
         """
     PROCESSORS.trigger(kind=kind, proc=proc)
-
 
 def halt():
     """
@@ -329,7 +330,48 @@ def set_signal_and_speaker(signal, speaker, equalize=True, data_tag='data', chan
     PROCESSORS.write(tag=chan_tag, value=99, processors=other_procs)
 
 
+def set_signal_headphones(signal, speaker, equalize=True, data_tags=['data_l', 'data_r'], chan_tags=['chan_l', 'chan_r'],
+                          n_samples_tag='playbuflen'):
+    """
+    Load a signal into the processor buffer and set the output channels to headphones.
+
+        Args:
+            speaker (string): A string specifying the headphone speakers to play from.
+                Can be 'left', 'right', or 'both'.
+            signal (array-like): signal to load to the buffer, must be one-dimensional
+            equalize (bool): if True (=default) apply loudspeaker equalization
+            data_tags (List): A list containing the names of the tags feeding into the signal buffers
+            chan_tags (List): A list containing the names of the tags setting the output channel numbers
+            play_tag ('string'): Name of the tag connected to the playback switch
+    """
+    speakers = SPEAKERS
+    if speaker == 'both':
+        idx = slice(0, 2)
+        if signal.n_channels == 1:
+            signal = slab.Binaural(signal)
+    if speaker == 'left':
+        idx = slice(0, 1)
+    if speaker == 'right':
+        idx = slice(1, 2)
+    to_play = copy.deepcopy(signal)
+    PROCESSORS.write(tag=n_samples_tag, value=signal.n_samples, processors='RP2')
+    for i, (speaker, ch_tag, data_tag) in enumerate(zip(speakers[idx], chan_tags[idx], data_tags[idx])):
+        if equalize:
+            logging.info('Applying calibration.')  # apply level and frequency calibration
+            to_play = apply_equalization(signal=signal.channel(i), speaker=i).data
+        elif not equalize:
+            to_play = signal.channel(i).data
+        PROCESSORS.write(tag=ch_tag, value=speaker.analog_channel, processors=speaker.analog_proc)
+        PROCESSORS.write(tag=data_tag, value=to_play, processors=speaker.analog_proc)
+
 def set_speaker(speaker):
+    """
+    Set the analog channel on the processor corresponding to the selected speaker
+    Args:
+        speaker: the speaker to be selected
+    Returns:
+        None
+    """
     speaker = pick_speakers(speaker)[0]
     PROCESSORS.write(tag='chan', value=speaker.analog_channel, processors=speaker.analog_proc)
     other_procs = set([s.analog_proc for s in SPEAKERS])
@@ -348,6 +390,8 @@ def flush_buffers(processor, maximum_n_samples=80000):
     else:
         for i in range(n_buffer_dict.get(circuit)):
             PROCESSORS.write(tag=f"data{i}", value=np.zeros(maximum_n_samples), processors=processor)
+
+
 
 def play_and_record(speaker, sound, compensate_delay=True, compensate_attenuation=False, equalize=False,
                     recording_samplerate=97656):
@@ -374,7 +418,7 @@ def play_and_record(speaker, sound, compensate_delay=True, compensate_attenuatio
         write(tag="playbuflen", value=sound.n_samples, processors=["RX81", "RX82"])
     if compensate_delay:
         n_delay = get_recording_delay(distance=speaker.distance, play_from="RX8", rec_from="RP2", sample_rate=recording_samplerate)
-        n_delay += 50  # make the delay a bit larger to avoid missing the sound's onset
+        n_delay += int(.00325 * recording_samplerate)  # empirically tested for 100kHz samplerate
     else:
         n_delay = 0
     rec_n_samples = int(sound.duration * recording_samplerate)
@@ -407,6 +451,62 @@ def play_and_record(speaker, sound, compensate_delay=True, compensate_attenuatio
             rec.level = sound.level
     return rec
 
+def play_and_record_headphones(speaker, sound, compensate_delay=True, distance=0, compensate_attenuation=False,
+                               equalize=True, recording_samplerate=48828):
+    """
+    Play the signal from a speaker and return the recording. Delay compensation
+    means making the buffer of the recording processor n samples longer and then
+    throwing the first n samples away when returning the recording so sig and
+    rec still have the same length. For this to work, the circuits rec_buf.rcx
+    and play_buf.rcx have to be initialized on RP2 and RX8s and the mic must
+    be plugged in.
+    Parameters:
+        speaker (string): A string specifying the headphone speakers to play from.
+                Can be 'left', 'right', or 'both'.
+        sound: instance of slab.Sound, signal that is played from the speaker
+        distance: distance between sound sources and microphone (symmetric)
+        compensate_delay: bool, compensate the delay between play and record
+        compensate_attenuation:
+        equalize:
+        recording_samplerate: samplerate of the recording
+    Returns:
+        rec: 2-D array, recorded signal
+    """
+    fs_out = sound.samplerate  # original samplerate of input signal
+    if sound.samplerate != recording_samplerate:
+        sound = sound.resample(recording_samplerate)
+    if PROCESSORS.mode != "bi_play_rec":  # read data for left and right ear from buffer
+        raise ValueError("Setup must be initialized in mode 'bi_play_rec'.")
+    if compensate_delay:
+        n_delay = get_recording_delay(play_from="RP2", rec_from="RP2", distance=distance)
+        n_delay += int(.0014 * recording_samplerate)  # empirically tested
+    else:
+        n_delay = 0
+    rec_n_samples = int(sound.duration * recording_samplerate)
+    write(tag="recbuflen", value=rec_n_samples + n_delay, processors="RP2")
+    set_signal_headphones(signal=sound, speaker=speaker, equalize=equalize)
+    play()
+    wait_to_finish_playing(tag='recording')
+    if speaker == 'both':
+        rec = slab.Binaural([read(tag='datal', processor='RP2', n_samples=rec_n_samples + n_delay)[n_delay:],
+                             read(tag='datar', processor='RP2', n_samples=rec_n_samples + n_delay)[n_delay:]],
+                            samplerate=recording_samplerate)
+    elif speaker == 'left':
+        rec = slab.Sound(read(tag='datal', processor='RP2', n_samples=rec_n_samples + n_delay)[n_delay:],
+                         samplerate=recording_samplerate)
+    elif speaker == 'right':
+        rec = slab.Sound(read(tag='datar', processor='RP2', n_samples=rec_n_samples + n_delay)[n_delay:],
+                         samplerate=recording_samplerate)
+    if sound.samplerate != recording_samplerate:
+        rec = rec.resample(fs_out)
+    if compensate_attenuation:
+        if isinstance(rec, slab.Binaural):
+            iid = rec.left.level - rec.right.level
+            rec.level = sound.level
+            rec.left.level += iid
+        else:
+            rec.level = sound.level
+    return rec
 
 def get_recording_delay(distance, sample_rate=48828, play_from=None, rec_from=None):
     """
@@ -445,7 +545,6 @@ def get_recording_delay(distance, sample_rate=48828, play_from=None, rec_from=No
         n_ad = 0
     return n_sound_traveling + n_da + n_ad
 
-
 def apply_equalization(signal, speaker, level=True, frequency=True):
     """
     Apply level correction and frequency equalization to a signal
@@ -471,6 +570,77 @@ def apply_equalization(signal, speaker, level=True, frequency=True):
         equalized_signal = speaker.filter.apply(equalized_signal)
     return equalized_signal
 
+def equalize_headphones(bandwidth=1/10, threshold=.3, low_cutoff=100, high_cutoff=16000, alpha=1.0, file_name=None):
+    """
+       Equalize the headphones in two steps. First: equalize over all
+       level differences by a constant for each speaker. Second: remove spectral
+       difference by inverse filtering. For more details on how the
+       inverse filters are computed see the documentation of slab.Filter.equalizing_filterbank
+
+       Args:
+           bandwidth (float): Width of the filters, used to divide the signal into subbands, in octaves. A small
+               bandwidth results in a fine tuned transfer function which is useful for equalizing small notches.
+           threshold (float): Threshold for level equalization. Correct level only for speakers that deviate more
+               than <threshold> dB from reference speaker
+           low_cutoff (int | float): The lower limit of frequency equalization range in Hz.
+           high_cutoff (int | float): The upper limit of frequency equalization range in Hz.
+           alpha (float): Filter regularization parameter. Values below 1.0 reduce the filter's effect, values above
+               amplify it. WARNING: large filter gains may result in temporal distortions of the sound
+           file_name (string): Name of the file to store equalization parameters.
+
+       """
+    global SETUP
+    if not PROCESSORS.mode == "bi_play_rec":
+        PROCESSORS.initialize_default(mode="bi_play_rec")
+        SETUP = 'headphones'
+    sound = slab.Binaural.chirp(duration=0.1, level=85, from_frequency=low_cutoff, to_frequency=high_cutoff, kind='linear')
+    speakers = SPEAKERS
+    # reference_speaker = 'left'
+    # don't do level calibration for now
+    # temp_recs = []
+    # for i in range(20):
+    #     rec = play_and_record_headphones(reference_speaker, sound, equalize=False)
+    #     temp_recs.append(rec.data)
+    # target = slab.Sound(data=np.mean(temp_recs, axis=0))
+    # # # use original signal as reference - WARNING could result in unrealistic equalization filters,
+    # #  can be used for HRTF measurement calibration to get really flat chirp spectra
+    # baseline_amp = target.level
+    # target = deepcopy(sound)
+    # target.level = baseline_amp
+    # temp_recs = []
+    # for i in range(20):
+    #     rec = play_and_record_headphones(speaker='both', sound=sound, equalize=False)
+    #     temp_recs.append(rec.data)
+    # rec = slab.Sound(data=np.mean(temp_recs, axis=0))
+    #     # recordings.append(numpy.mean(temp_recs, axis=0))
+    # rec.data[:, np.logical_and(rec.level > target.level - threshold,
+    #                                      rec.level < target.level + threshold)] = target.data
+    # equalization_levels = target.level - rec.level
+    equalization_levels = [0, 0]
+    recordings = []
+    attenuated = deepcopy(sound)
+    attenuated.level += equalization_levels
+    for i in range(20):
+        rec = play_and_record_headphones(speaker='both', sound=attenuated, equalize=False)
+        recordings.append(rec.data)
+    recording = slab.Binaural(data=np.mean(recordings, axis=0))
+
+    filter_bank = slab.Filter.equalizing_filterbank(sound.channel(0), recording, low_cutoff=low_cutoff,
+                                                    high_cutoff=high_cutoff, bandwidth=bandwidth, alpha=alpha)
+    equalization = {f"{speakers[i].index}": {"level": equalization_levels[i], "filter": filter_bank.channel(i)}
+                    for i in range(len(speakers))}
+    if file_name is None:  # use the default filename and rename teh existing file
+        file_name = DIR / 'data' / f'calibration_{SETUP}.pkl'
+    else:
+        file_name = DIR / 'data' / f'calibration_{SETUP}_{file_name}.pkl'
+    # if file_name.exists():  # move the old calibration to the log folder
+        # date = datetime.datetime.now().strftime("_%Y-%m-%d-%H-%M-%S")
+        # file_name = file_name.parent / (file_name.stem + date + file_name.suffix)
+        # file_name.rename(file_name.parent / (file_name.stem + date + file_name.suffix))
+    with open(file_name, 'wb') as f:  # save the newly recorded calibration
+        pickle.dump(equalization, f, pickle.HIGHEST_PROTOCOL)
+    logging.info(f'Saved equalization to {file_name}')
+    return equalization
 
 def equalize_speakers(speakers="all", reference_speaker=23, bandwidth=1 / 10, threshold=.3,
                       low_cutoff=200, high_cutoff=16000, alpha=1.0, file_name=None):
@@ -659,12 +829,17 @@ def spectral_range(signal, bandwidth=1 / 5, low_cutoff=50, high_cutoff=20000, th
     return difference
 
 
-def get_head_pose(method='sensor'):
+def get_head_pose(method='sensor', convention='psychoacoustics'):
     """
     Wrapper for the get headpose methods of the camera and sensor classes
 
     Args:
         method (string): Method use for headpose estimation. Can be "camera" or "sensor"
+        convention (string): Convention of the spherical coordinate system. Can be 'physics' or 'psychoacoustics'.
+
+    Returns:
+        head_pose (numpy.ndarray): Array containing spheric coordinates of
+        the current head orientation: (Azimuth, Elevation)
     """
     if method.lower() == 'camera':
         if not CAMERAS.n_cams:
@@ -676,7 +851,7 @@ def get_head_pose(method='sensor'):
         if not SENSOR.device:
             raise ValueError("No sensor connected!")
         else:
-            head_pose = SENSOR.get_pose()
+            head_pose = SENSOR.get_pose(convention=convention)
     else:
         raise ValueError("Method must be 'camera' or 'sensor'")
     return head_pose
@@ -702,20 +877,53 @@ def check_pose(fix=(0, 0), var=10):
     else:
         return True
 
+def get_head_response(method='sensor', proc="RP2", tag="response"):
+    """
+    Get participants localization response by pointing their head towards the perceived
+     sound source and pressing a button.
+    Args:
+        method (string): Method use for headpose estimation. Can be "camera" or "sensor".
+        proc (string): Precssor that reads out the button response
+        tag (string): Name of the Tag in the RPvdsEX file connected to the button input
+    Returns:
+        head_pose (numpy.ndarray): Array containing spheric coordinates of
+        the current head orientation: (Azimuth, Elevation)
+    """
+    response = 0
+    while not response:
+        pose = get_head_pose(method)
+        if all(pose):
+            print('head pose: azimuth: %.1f, elevation: %.1f' % (pose[0], pose[1]), end="\r", flush=True)
+        else:
+            print('no head pose detected', end="\r", flush=True)
+        response = read(tag, proc)
+    if all(pose):
+        print('Response| azimuth: %.1f, elevation: %.1f' % (pose[0], pose[1]))
+    return pose
 
-def calibrate_sensor():
+def calibrate_sensor(led_feedback=True, button_control='processor'):
     """
     Calibrate the motion sensor offset to 0° Azimuth and 0° Elevation. A LED will light up to guide head orientation
     towards the center speaker. After a button is pressed, head orientation will be measured until it remains stable.
     The average is then used as an offset for pose estimation.
+        Args:
+        led_feedback: whether to turn on the central led to assist gaze control during calibration
+        button_control (str): whether to initialize calibration by button response; may be 'processor' if a button is
+         connected to the RP2 or 'keyboard', if usb keyboard input is to be used.
+    Returns:
+        bool: True if difference between pose and fix is smaller than var, False otherwise
     """
     log_size = 100
     limit = 0.2
-    [led_speaker] = pick_speakers(23)  # s get object for center speaker LED
-    write(tag='bitmask', value=led_speaker.digital_channel,
-          processors=led_speaker.digital_proc)  # illuminate LED
-    logging.debug('rest at center speaker and press button to start calibration...')
-    wait_for_button()  # start calibration after button press
+    if led_feedback:
+        [led_speaker] = pick_speakers(23)  # get object for center speaker LED
+        write(tag='bitmask', value=led_speaker.digital_channel,
+              processors=led_speaker.digital_proc)  # illuminate LED
+    if button_control == 'processor':
+        logging.debug('rest at center speaker and press button to start calibration...')
+        wait_for_button()  # start calibration after button press
+    elif button_control == 'keyboard':
+        input('Rest at center speaker and press button to start calibration...')
     logging.debug('calibrating')
     log = np.zeros(2)
     while True:  # wait in loop for sensor to stabilize
@@ -727,7 +935,8 @@ def calibrate_sensor():
             logging.debug('az diff: %f,  ele diff: %f' % (diff[0], diff[1]))
             if diff[0] < limit and diff[1] < limit:  # limit in degree
                 break
-    write(tag='bitmask', value=0, processors=led_speaker.digital_proc)  # turn off LED
+    if led_feedback:
+        write(tag='bitmask', value=0, processors=led_speaker.digital_proc)  # turn off LED
     SENSOR.pose_offset = np.around(np.mean(log[-int(log_size / 2):].astype('float16'), axis=0), decimals=2)
     logging.debug('Sensor calibration complete.')
 
