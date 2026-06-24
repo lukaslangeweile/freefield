@@ -516,60 +516,21 @@ def equalize_speakers(speakers="all", reference_speaker=23, bandwidth=1 / 10, th
         file_name.rename(file_name.parent / (file_name.stem + date + file_name.suffix))
     with open(file_name, 'wb') as f:  # save the newly recorded calibration
         pickle.dump(equalization, f, pickle.HIGHEST_PROTOCOL)
-
-
-def _level_equalization(speakers, sounds, algorithm, birec):
+def _level_equalization(speakers, sound, reference_speaker, threshold):
     """
     Record the signal from each speaker in the list and return the level of each
     speaker relative to the target speaker(target speaker must be in the list)
     """
-
-    equalization_levels = []
-
+    target_recording = play_and_record(reference_speaker, sound, equalize=False)
+    recordings = []
     for speaker in speakers:
-        equalization_levels_sounds = []
-        for i, sound in enumerate(sounds):
-            logging.info(f"Starting equalization for speaker {speaker.index}, sound number {i}.")
-            stairs = slab.Staircase(start_val=(70 + speaker.index*2), n_reversals=10,
-                                    step_sizes=[5, 3, 1])
-            for level in stairs:
-                adapted_sound = slab.Sound(sound.data)
-                adapted_sound.level = level
-                recording = play_and_record(speaker, adapted_sound, equalize=False, compensate_delay=True)
-                sound_parameter, recording_parameter = _get_algorithm_parameters(algorithm, sound,
-                                                            recording)
-                logging.debug(f'Level of played sound = {adapted_sound.level}')
-                logging.debug(f'recording_paramteter = {recording_parameter}, sound_parameter = {sound_parameter}')
-                if recording_parameter > sound_parameter:
-                    stairs.add_response(1)
-                else:
-                    stairs.add_response(0)
-                if SETUP == "cathedral":  # otherwise reverb of previous sounds would disturb equalization
-                    time.sleep(2.7)
-            equalization_levels_sounds.append(stairs.threshold())
-            logging.info(f"Equalization for speaker {speaker.index}, sound number {i} finished.")
-        equalization_levels.append(np.mean(equalization_levels_sounds))
-    return equalization_levels
-
-def _get_algorithm_parameters(algorithm, sound, recording):
-    if algorithm.lower() == "rms":
-        sound_parameter = np.sqrt(np.mean(np.square(sound.data)))
-        recording_parameter = np.sqrt(np.mean(np.square(recording.data)))
-    elif algorithm.lower() == "dbfs":
-        sound_parameter = np.max(np.abs(sound.data))
-        recording_parameter = np.max(np.abs(recording.data))
-    elif algorithm.lower() == "lufs":
-        meter_sound = pyloudnorm.Meter(sound.samplerate)
-        meter_recording = pyloudnorm.Meter(recording.samplerate)
-        if sound.duration < 0.400:
-            meter_sound.block_size = 0.100
-            meter_recording.block_size = 0.100
-        sound_parameter = meter_sound.integrated_loudness(sound.data)
-        recording_parameter = meter_recording.integrated_loudness(recording.data)
-    else:
-        logging.warning(f"There is no algorithm {algorithm}. Choose from RMS, dBFS or LUFS.")
-        return
-    return sound_parameter, recording_parameter
+        recordings.append(play_and_record(speaker, sound, equalize=False))
+    recordings = slab.Sound(recordings)
+    recordings.data[:, np.logical_and(recordings.level > target_recording.level-threshold,
+                    recordings.level < target_recording.level+threshold)] = target_recording.data
+    equalization_levels = target_recording.level - recordings.level
+    recordings.data[:, recordings.level < threshold] = target_recording.data  # thresholding
+    return target_recording.level / recordings.level
 
 def _frequency_equalization(speakers, sound, reference_speaker, calibration_levels, bandwidth,
                             low_cutoff, high_cutoff, alpha, threshold):
@@ -614,6 +575,58 @@ def test_equalization(speakers="all"):
         rec_full.append(play_and_record(speaker, full_equalized, equalize=False))
     return slab.Sound(rec_raw), slab.Sound(rec_level), slab.Sound(rec_full)
 
+def _cathedral_level_equalization(speakers, sounds, algorithm, birec):
+    """
+    Record the signal from each speaker in the list and return the level of each
+    speaker relative to the target speaker(target speaker must be in the list)
+    """
+
+    equalization_levels = []
+
+    for speaker in speakers:
+        equalization_levels_sounds = []
+        for i, sound in enumerate(sounds):
+            logging.info(f"Starting equalization for speaker {speaker.index}, sound number {i}.")
+            stairs = slab.Staircase(start_val=(70 + speaker.index*2), n_reversals=10,
+                                    step_sizes=[5, 3, 1])
+            for level in stairs:
+                adapted_sound = slab.Sound(sound.data)
+                adapted_sound.level = level
+                recording = play_and_record(speaker, adapted_sound, equalize=False, compensate_delay=True)
+                sound_parameter, recording_parameter = _get_cathedral_level_algorithm_parameters(algorithm, sound,
+                                                            recording)
+                logging.debug(f'Level of played sound = {adapted_sound.level}')
+                logging.debug(f'recording_paramteter = {recording_parameter}, sound_parameter = {sound_parameter}')
+                if recording_parameter > sound_parameter:
+                    stairs.add_response(1)
+                else:
+                    stairs.add_response(0)
+                if SETUP == "cathedral":  # otherwise reverb of previous sounds would disturb equalization
+                    time.sleep(2.7)
+            equalization_levels_sounds.append(stairs.threshold())
+            logging.info(f"Equalization for speaker {speaker.index}, sound number {i} finished.")
+        equalization_levels.append(np.mean(equalization_levels_sounds))
+    return equalization_levels
+
+def _get_cathedral_level_algorithm_parameters(algorithm, sound, recording):
+    if algorithm.lower() == "rms":
+        sound_parameter = np.sqrt(np.mean(np.square(sound.data)))
+        recording_parameter = np.sqrt(np.mean(np.square(recording.data)))
+    elif algorithm.lower() == "dbfs":
+        sound_parameter = np.max(np.abs(sound.data))
+        recording_parameter = np.max(np.abs(recording.data))
+    elif algorithm.lower() == "lufs":
+        meter_sound = pyloudnorm.Meter(sound.samplerate)
+        meter_recording = pyloudnorm.Meter(recording.samplerate)
+        if sound.duration < 0.400:
+            meter_sound.block_size = 0.100
+            meter_recording.block_size = 0.100
+        sound_parameter = meter_sound.integrated_loudness(sound.data)
+        recording_parameter = meter_recording.integrated_loudness(recording.data)
+    else:
+        logging.warning(f"There is no algorithm {algorithm}. Choose from RMS, dBFS or LUFS.")
+        return
+    return sound_parameter, recording_parameter
 
 def spectral_range(signal, bandwidth=1 / 5, low_cutoff=50, high_cutoff=20000, thresh=3,
                    plot=True, log=True):
