@@ -1,9 +1,13 @@
 from __future__ import print_function
-from mbientlab.warble import *
-from mbientlab.metawear import *
 import time
 import numpy
 import logging
+try:
+    from mbientlab.warble import *
+    from mbientlab.metawear import *
+except  ModuleNotFoundError:
+    mbientlab = None
+    logging.warning('Could not import mbientlab - working with motion sensor is disabled')
 
 class State:
     def __init__(self, device):
@@ -32,18 +36,44 @@ class Sensor():
         devices = {}
         BleScanner.set_handler(handler)
         BleScanner.start()
-        logging.debug("Scanning for motion sensor")
-        t_start = time.time()
-        while not 'MetaWear' in devices.values():
-            time.sleep(0.1)  # scanning for devices time
-            if time.time() > t_start + 20:
-                logging.warning("Could not find motion sensor")
-                return None
+        # make a choice if multiple sensors are found
+        while True:
+            logging.info("Scanning for motion sensor")
+            t_start = time.time()
+            while not time.time() > t_start + 2:
+                time.sleep(0.1)  # scanning for devices time
+            if 'MetaWear' in devices.values():
+                mac_list = []
+                for idx, device in enumerate(devices.values()):
+                    if device == 'MetaWear':
+                        mac_list.append(list(devices.keys())[idx])
+                if len(mac_list) > 1:
+                    logging.warning('More than one motion sensor detected.\nChoose a sensor:')
+                    for idx, mac_id in enumerate(mac_list):
+                        print(f'{idx} {mac_id}\n')
+                    address = mac_list[int(input())]
+                else:
+                    address = mac_list[0]
+                break
+            else:
+                logging.warning("Could not find motion sensor. Retry? (Y/n)")
+                if input().upper() == 'Y':
+                    continue
+                else:
+                    return None
+
+        # alternative: search for max 20 seconds and continue if any sensor is found
+        # while not 'MetaWear' in devices.values():
+        #     time.sleep(0.1)  # scanning for devices time
+        #     if time.time() > t_start + 20:
+        #         logging.warning("Could not find motion sensor")
+        #         return None
+        # for idx, device in enumerate(devices.values()):
+        #     if device == 'MetaWear':
+        #         address = list(devices.keys())[idx]
+
         BleScanner.stop()
-        for idx, device in enumerate(devices.values()):
-            if device == 'MetaWear':
-                address = list(devices.keys())[idx]
-        logging.debug("Connecting to %s" % (address))
+        logging.info("Connecting to motion sensor (MAC: %s)" % (address))
         device = MetaWear(address)
         while not device.is_connected:
             try:
@@ -54,8 +84,8 @@ class Sensor():
         logging.debug("Configuring motion sensor")
         # setup ble
         libmetawear.mbl_mw_settings_set_connection_parameters(sensor.device.board, 7.5, 7.5, 0, 6000)
-        # setup quaternion
-        libmetawear.mbl_mw_sensor_fusion_set_mode(sensor.device.board, SensorFusionMode.NDOF)
+        # setup quaternionA
+        # libmetawear.mbl_mw_sensor_fusion_set_mode(sensor.device.board, SensorFusionMode.NDOF)
         libmetawear.mbl_mw_sensor_fusion_set_mode(sensor.device.board, SensorFusionMode.IMU_PLUS)
         libmetawear.mbl_mw_sensor_fusion_set_acc_range(sensor.device.board, SensorFusionAccRange._8G)
         libmetawear.mbl_mw_sensor_fusion_set_gyro_range(sensor.device.board, SensorFusionGyroRange._2000DPS)
@@ -69,14 +99,14 @@ class Sensor():
         self.device = sensor
         logging.info('Motion sensor connected and running')
 
-    def get_pose(self, n_datapoints=30, calibrate=True, print_pose=False):
+    def get_pose(self, n_datapoints=30, calibrate=True, print_pose=False, convention='psychoacoustics'):
         """
         Read orientation in polar angle from the motion sensor.
         Args:
             n_datapoints (int): Number of data points from which an average orientation is calculated.
             calibrate (boolean): Whether to subtract an offset from the orientation.
             print_pose (boolean): If true, continuously print out orientation.
-
+            convention (str): Convention of the spherical coordinate system. Can be 'physics' or 'psychoacoustics'.
         Returns:
             pose (numpy.ndarray): Sensor orientation in polar angles.
         """
@@ -86,17 +116,27 @@ class Sensor():
             pose = numpy.array((self.device.pose.yaw, self.device.pose.roll))
             if not any(numpy.isnan(pose)) and all(-180 <= _pose <= 360 for _pose in pose)\
                     and not any(-1e-3 <= _pose <= 1e-3 for _pose in pose):
-                if pose[0] > 180:  # todo fix this
-                    pose[0] -= 360
+                if convention == 'psychoacoustics':
+                    if pose[0] > 180:
+                        pose[0] -= 360
+                elif convention == 'physics':
+                        pose[0] = 360 - pose[0]
+                else: raise ValueError('Convention must be "psychoacoustics" or "physics"!')
                 pose_log[n] = pose
                 n += 1
+            if not self.device.device.is_connected:
+                logging.warning('Sensor connection lost! Reconnect? (Y/n)')
+                if input().upper() == 'Y':
+                    # self.halt()  # probably unnecessary
+                    self.connect()
+                return None  # break from the loop and return pose=None
         d = numpy.abs(pose_log - numpy.median(pose_log))  # deviation from median
         mdev = numpy.median(d)  # median deviation
         s = d / mdev if mdev else numpy.zeros_like(d)  # factorized mean deviation to detect outliers
         pose = numpy.array((numpy.mean(pose_log[:, 0][(s < 2)[:, 0]]), numpy.mean(pose_log[:, 1][(s < 2)[:, 1]])))
         if print_pose:
             if all(pose):
-                logging.info('head pose: azimuth: %.1f, elevation: %.1f' % (pose[0], pose[1]))
+                logging.debug('head pose: azimuth: %.1f, elevation: %.1f' % (pose[0], pose[1]))
             else:
                 logging.warning("Could not detect head pose")
         if calibrate is True:
@@ -114,18 +154,31 @@ class Sensor():
         Disconnect the motion sensor.
         """
         if self.device:
-            libmetawear.mbl_mw_sensor_fusion_stop(self.device.device.board);
+            libmetawear.mbl_mw_sensor_fusion_stop(self.device.device.board)
             # unsubscribe to signal
             signal = libmetawear.mbl_mw_sensor_fusion_get_data_signal(self.device.device.board, SensorFusionData.EULER_ANGLE);
             libmetawear.mbl_mw_datasignal_unsubscribe(signal)
             # disconnect
             libmetawear.mbl_mw_debug_disconnect(self.device.device.board)
-            while not self.device.device.is_connected:
-                time.sleep(0.1)
+            # while not self.device.device.is_connected:
+            time.sleep(0.5)
             self.device.device.disconnect()
             self.device = None
             logging.info('Motion sensor disconnected')
 
-
+    def set_fusion_mode(self, fusion_mode):
+        """
+        Change the fusion mode of the sensor.
+        Arguments:
+            fusion_mode (str): Fusion mode of the sensor.
+            NDoF: Calculates absolute orientation from accelerometer, gyro, and magnetometer
+            IMUPlus: Calculates relative orientation in space from accelerometer and gyro data
+            Compass: Determines geographic direction from th Earth’s magnetic field
+            M4G: Similar to IMUPlus except rotation is detected with the magnetometer
+        """
+        mode = getattr(SensorFusionMode, fusion_mode.upper())
+        libmetawear.mbl_mw_sensor_fusion_set_mode(self.device.device.board, mode)
+        libmetawear.mbl_mw_sensor_fusion_write_config(self.device.device.board)
+        logging.info(f'Sensor fusion mode set to {fusion_mode}')
 
 

@@ -46,7 +46,7 @@ class Processors(object):
             # advance index if a model appears more than once
             models.append(model)
             index = Counter(models)[model]
-            logging.debug(f"initializing {name} of type {model} with index {index}")
+            logging.info(f"initializing {name} of type {model} with index {index}")
             self.processors[name] = self._initialize_proc(model, circuit,
                                                           connection, index)
             self.rcx_dict[name] = str(circuit)
@@ -62,7 +62,6 @@ class Processors(object):
             if setup == "cathedral":
                 proc_list = [['RP2', 'RP2', DIR / 'data' / 'rcx' / 'rec_buf.rcx'],
                              ['RX81', 'RX8', DIR / 'data' / 'rcx' / 'play_buf.rcx']]
-                #TODO: Decide on whether naming should include indices in cathedral setup
             else:
                 proc_list = [['RP2', 'RP2', DIR / 'data' / 'rcx' / 'rec_buf.rcx'],
                              ['RX81', 'RX8', DIR / 'data' / 'rcx' / 'play_buf.rcx'],
@@ -75,6 +74,14 @@ class Processors(object):
                 proc_list = [['RP2', 'RP2',  DIR/'data'/'rcx'/'bi_rec_buf.rcx'],
                              ['RX81', 'RX8', DIR/'data'/'rcx'/'play_buf.rcx'],
                              ['RX82', 'RX8', DIR/'data'/'rcx'/'play_buf.rcx']]
+        elif mode.lower() == "bi_play_rec":
+            if setup == "cathedral":
+                proc_list = [['RP2', 'RP2', DIR / 'data' / 'rcx' / 'bi_play_rec_buf.rcx'],
+                             ['RX81', 'RX8', DIR / 'data' / 'rcx' / 'bits.rcx']]
+            else:
+                proc_list = [['RP2', 'RP2',  DIR/'data'/'rcx'/'bi_play_rec_buf.rcx'],
+                            ['RX81', 'RX8', DIR / 'data' / 'rcx' / 'bits.rcx'],
+                            ['RX82', 'RX8', DIR / 'data' / 'rcx' / 'bits.rcx']]
         elif mode.lower() == "loctest_freefield":
             if setup == "cathedral":
                 proc_list = [['RP2', 'RP2', DIR / 'data' / 'rcx' / 'button.rcx'],
@@ -155,19 +162,23 @@ class Processors(object):
                 proc.Halt()
 
     def trigger(self, kind='zBusA', proc=None):
+        if isinstance(kind, str) and not self._zbus:
+            logging.warning('zBus trigger not available. Default to soft trigger 1')
+            kind = 1
+            proc = list(self.processors.keys())
         if isinstance(kind, int):
             if not proc:
                 raise ValueError('Proc needs to be specified for SoftTrig!')
             if not 1 <= kind <= 10:
                 raise ValueError("software triggers must be between 1 and 10!")
-            self.processors[proc].SoftTrg(kind)
+            [self.processors[processor].SoftTrg(kind) for processor in proc]
             logging.debug(f'SoftTrig {kind} sent to {proc}.')
         elif 'zbus' in kind.lower():
             if self._zbus is None:
                 raise ValueError('ZBus needs to be initialized first!')
             elif kind.lower() == "zbusa":
                 self._zbus.zBusTrigA(0, 0, 20)
-                logging.debug('zBusA trigger sent.')
+                logging.info('zBusA trigger sent.')
             elif kind.lower() == "zbusb":
                 self._zbus.zBusTrigB(0, 0, 20)
         else:
@@ -183,16 +194,16 @@ class Processors(object):
                 raise ValueError(err)
         else:
             rp = _COM()
-        logging.debug(f'Connecting to {model} processor ...')
+        logging.info(f'Connecting to {model} processor ...')
         connected = 0
         if model.upper() == 'RP2':
             connected = rp.ConnectRP2(connection, index)
         elif model.upper() == 'RX8':
             connected = rp.ConnectRX8(connection, index)
-        elif model.upper() == 'RM1':
-            connected = rp.ConnectRM1(connection, index)
         elif model.upper() == 'RX6':
             connected = rp.ConnectRX6(connection, index)
+        elif model.upper() == 'RM1':
+            connected = rp.ConnectRM1(connection, index)
         if not connected:
             logging.warning(f'Unable to connect to {model} processor!')
         else:  # connecting was successful, load circuit
@@ -217,7 +228,7 @@ class Processors(object):
             except win32com.client.pythoncom.com_error as err:
                 logging.warning(err)
         if zb.ConnectZBUS(connection):
-            logging.debug('Connected to ZBUS.')
+            logging.info('Connected to ZBUS.')
         else:
             logging.warning('Failed to connect to ZBUS.')
         return zb
