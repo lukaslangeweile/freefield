@@ -1,27 +1,27 @@
-import time
-from pathlib import Path
-import os
 import datetime
-from copy import deepcopy
-import pickle
-from dataclasses import dataclass
 import logging
+import os
+import pickle
+import random
+import time
+from copy import deepcopy
+from dataclasses import dataclass
+from pathlib import Path
+
 import numpy as np
+import pyloudnorm
 import slab
 from matplotlib import pyplot as plt
 from matplotlib.axes import Axes
-import pyloudnorm
-import random
 
-import freefield
-from freefield import DIR, Processors, cameras, motion_sensor
+from freefield import DIR
 
 logging.basicConfig(level=logging.INFO)
 slab.Signal.set_default_samplerate(48828)  # default samplerate for generating sounds, filters etc.
 # Initialize global variables:
-CAMERAS = cameras.Cameras()
-PROCESSORS = Processors()
-SENSOR = motion_sensor.Sensor()
+CAMERAS = None
+PROCESSORS = None
+SENSOR = None
 SPEAKERS = []  # list of all the loudspeakers in the active setup
 SETUP = ""  # the currently active setup - "dome" or "arc"
 
@@ -55,7 +55,9 @@ def initialize(setup, default=None, device=None, zbus=True, connection="GB", cam
         >>> initialize(setup="dome", default="loctest_freefield")
     """
     global PROCESSORS, CAMERAS, SETUP, SPEAKERS, SENSOR
-    # initialize device
+    # initialize device and environment
+    from freefield.processors import Processors
+    PROCESSORS = Processors()
     SETUP = setup
     if bool(device) == bool(default):
         raise ValueError("You have to specify a device OR a default_mode")
@@ -64,8 +66,12 @@ def initialize(setup, default=None, device=None, zbus=True, connection="GB", cam
     elif default is not None:
         PROCESSORS.initialize_default(setup, default)
     if camera is not None:
+        from freefield import cameras
+        CAMERAS = cameras.Cameras()
         CAMERAS = cameras.initialize('flir')
     if sensor_tracking:
+        from freefield import motion_sensor
+        SENSOR = motion_sensor.Sensor()
         SENSOR.connect()
     SPEAKERS = read_speaker_table()  # load the table containing the information about the loudspeakers
     try:
@@ -97,7 +103,6 @@ class Speaker:
         else:
             calibrated = "calibrated"
         return f"<speaker {self.index} at azimuth {self.azimuth} and elevation {self.elevation}, {calibrated}>"
-
 
 def read_speaker_table():
     """
@@ -164,6 +169,8 @@ def write(tag, value, processors):
         data = numpy.random.randn(1000)
         write('data', data, "RX81") # write data array to the tag 'data' on the RX81
     """
+    if PROCESSORS is None:
+        raise RuntimeError("PROCESSORS is not initialized. Call freefield.initialize() first.")
     PROCESSORS.write(tag, value, processors)
 
 
@@ -195,6 +202,8 @@ def play(kind='zBusA', proc=None):
             range 1 - 10 and refer to software triggers for a single processor.
         proc (None, str): Processor to trigger. Only needed if a software trigger is used
         """
+    if PROCESSORS is None:
+        raise RuntimeError("PROCESSORS is not initialized. Call freefield.initialize() first.")
     PROCESSORS.trigger(kind=kind, proc=proc)
 
 
@@ -202,9 +211,12 @@ def halt():
     """
     Halt all devices in the setup, data stored in the working memory of the processors or cameras will be lost.
     """
-    PROCESSORS.halt()
-    CAMERAS.halt()
-    SENSOR.halt()
+    if PROCESSORS is not None:
+        PROCESSORS.halt()
+    if CAMERAS is not None:
+        CAMERAS.halt()
+    if SENSOR is not None:
+        SENSOR.halt()
 
 
 def wait_to_finish_playing(proc="all", tag="playback"):
@@ -220,6 +232,8 @@ def wait_to_finish_playing(proc="all", tag="playback"):
         proc (str, list of str): name(s) of the processor(s) to wait for.
         tag (str): name of the tag that signals if something is played
     """
+    if PROCESSORS is None:
+        raise RuntimeError("PROCESSORS is not initialized. Call freefield.initialize() first.")
     if proc == "all":
         proc = list(PROCESSORS.processors.keys())
     elif isinstance(proc, str):
@@ -240,6 +254,8 @@ def wait_for_button(proc="RP2", tag="response"):
         tag (str): Tag which is read.
 
     """
+    if PROCESSORS is None:
+        raise RuntimeError("PROCESSORS is not initialized. Call freefield.initialize() first.")
     while not PROCESSORS.read(tag=tag, proc=proc):
         time.sleep(0.1)  # wait until button is pressed
 
@@ -314,6 +330,8 @@ def set_signal_and_speaker(signal, speaker, equalize=True, data_tag='data', chan
             chan_tag ('string'): Name of the tag setting the output channel number
             play_tag ('string'): Name of the tag connected to the playback switch
     """
+    if PROCESSORS is None:
+        raise RuntimeError("PROCESSORS is not initialized. Call freefield.initialize() first.")
     signal = slab.Sound(signal)
     speaker = pick_speakers(speaker)[0]
     if equalize:
@@ -330,6 +348,8 @@ def set_signal_and_speaker(signal, speaker, equalize=True, data_tag='data', chan
 
 
 def set_speaker(speaker):
+    if PROCESSORS is None:
+        raise RuntimeError("PROCESSORS is not initialized. Call freefield.initialize() first.")
     speaker = pick_speakers(speaker)[0]
     PROCESSORS.write(tag='chan', value=speaker.analog_channel, processors=speaker.analog_proc)
     other_procs = set([s.analog_proc for s in SPEAKERS])
@@ -337,6 +357,8 @@ def set_speaker(speaker):
     PROCESSORS.write(tag='chan', value=99, processors=other_procs)
 
 def flush_buffers(processor, maximum_n_samples=80000):
+    if PROCESSORS is None:
+        raise RuntimeError("PROCESSORS is not initialized. Call freefield.initialize() first.")
     n_buffer_dict = {"bi_play_buf.rcx": 2,
                         "play_buf.rcx": 1,
                         "play_buf_msl.rcx": 5,
@@ -368,6 +390,8 @@ def play_and_record(speaker, sound, compensate_delay=True, compensate_attenuatio
     Returns:
         rec: 1-D array, recorded signal
     """
+    if PROCESSORS is None:
+        raise RuntimeError("PROCESSORS is not initialized. Call freefield.initialize() first.")
     if SETUP == "cathedral":
         write(tag="playbuflen", value=sound.n_samples, processors=["RX81"])
     else:
@@ -494,6 +518,8 @@ def equalize_speakers(speakers="all", reference_speaker=23, bandwidth=1 / 10, th
         file_name (string): Name of the file to store equalization parameters.
 
     """
+    if PROCESSORS is None:
+        raise RuntimeError("PROCESSORS is not initialized. Call freefield.initialize() first.")
     if not PROCESSORS.mode == "play_rec":
         PROCESSORS.initialize_default(mode="play_rec")
     sound = slab.Sound.chirp(duration=0.1, from_frequency=low_cutoff, to_frequency=high_cutoff)
@@ -558,6 +584,8 @@ def test_equalization(speakers="all"):
     """
     Test the effectiveness of the speaker equalization
     """
+    if PROCESSORS is None:
+        raise RuntimeError("PROCESSORS is not initialized. Call freefield.initialize() first.")
     if not PROCESSORS.mode == "play_rec":
         PROCESSORS.initialize_default(mode="play_rec")
     not_equalized = slab.Sound.whitenoise(duration=.5)
@@ -680,13 +708,17 @@ def get_head_pose(method='sensor'):
         method (string): Method use for headpose estimation. Can be "camera" or "sensor"
     """
     if method.lower() == 'camera':
-        if not CAMERAS.n_cams:
+        if CAMERAS is None:
+            raise RuntimeError("CAMERAS is not initialized. Call freefield.initialize() first.")
+        elif not CAMERAS.n_cams:
             raise ValueError("No cameras initialized!")
         else:
             azi, ele = CAMERAS.get_head_pose(convert=True, average_axis=(1, 2), n_images=1)
             head_pose = np.array(azi, ele)
     elif method.lower() == 'sensor':
-        if not SENSOR.device:
+        if SENSOR is None:
+            raise RuntimeError("SENSOR is not initialized. Call freefield.initialize() first.")
+        elif not SENSOR.device:
             raise ValueError("No sensor connected!")
         else:
             head_pose = SENSOR.get_pose()
@@ -722,6 +754,9 @@ def calibrate_sensor():
     towards the center speaker. After a button is pressed, head orientation will be measured until it remains stable.
     The average is then used as an offset for pose estimation.
     """
+
+    if SENSOR is None:
+        raise RuntimeError("SENSOR is not initialized. Call freefield.initialize() first.")
     log_size = 100
     limit = 0.2
     [led_speaker] = pick_speakers(23)  # s get object for center speaker LED
@@ -759,6 +794,10 @@ def calibrate_camera(speakers, n_reps=1, n_images=5, show=True):
         pandas DataFrame: camera and world coordinates acquired (calibration is performed automatically)
     """
     # TODO: save the camera calibration in a temporary directory
+    if PROCESSORS is None:
+        raise RuntimeError("PROCESSORS is not initialized. Call freefield.initialize() first.")
+    if CAMERAS is None:
+        raise RuntimeError("CAMERAS is not initialized. Call freefield.initialize() first.")
     if not PROCESSORS.mode == "cam_calibration":  # initialize setup in camera calibration mode
         PROCESSORS.initialize_default(mode="cam_calibration")
     speakers = pick_speakers(speakers)
@@ -782,6 +821,10 @@ def calibrate_camera_no_visual(speakers, n_reps=1, n_images=5):
     exact same order without any randomization. When the whole setup is
     equipped with LEDs this function should be removed
     """
+    if PROCESSORS is None:
+        raise RuntimeError("PROCESSORS is not initialized. Call freefield.initialize() first.")
+    if CAMERAS is None:
+        raise RuntimeError("CAMERAS is not initialized. Call freefield.initialize() first.")
     if not PROCESSORS.mode == "cam_calibration":
         PROCESSORS.initialize_default(mode="cam_calibration")
     speakers = pick_speakers(speakers)
@@ -813,6 +856,8 @@ def localization_test_freefield(speakers, duration=0.5, n_reps=1, n_images=5, vi
     Returns:
         instance of slab.Trialsequence: the response is stored in the data attribute as tuples with (azimuth, elevation)
     """
+    if PROCESSORS is None:
+        raise RuntimeError("PROCESSORS is not initialized. Call freefield.initialize() first.")
     speakers = pick_speakers(speakers)
     if not PROCESSORS.mode == "loctest_freefield":
         PROCESSORS.initialize_default(mode="loctest_freefield")
@@ -861,6 +906,8 @@ def localization_test_headphones(speakers, signals, n_reps=1, n_images=5, visual
     Returns:
         instance of slab.Trialsequence: the response is stored in the data attribute as tuples with (azimuth, elevation)
     """
+    if PROCESSORS is None:
+        raise RuntimeError("PROCESSORS is not initialized. Call freefield.initialize() first.")
     if not PROCESSORS.mode == "loctest_headphones":
         PROCESSORS.initialize_default(mode="loctest_headphones")
     if not len(signals) == len(speakers):
@@ -935,3 +982,4 @@ def set_logger(level, report=True):
             logging.info('Logger set to %s.' %level.upper())
     except AttributeError:
         raise AttributeError("Choose from 'DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'")
+

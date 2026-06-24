@@ -11,7 +11,7 @@ on:
       - "setup.py"
       - "setup.cfg"
       - "requirements*.txt"
-      - ".github/workflows/tests.yml"
+      - ".github/workflows/old_tests.yml"
 
   push:
     branches:
@@ -23,13 +23,13 @@ on:
       - "setup.py"
       - "setup.cfg"
       - "requirements*.txt"
-      - ".github/workflows/tests.yml"
+      - ".github/workflows/old_tests.yml"
 
   workflow_dispatch:
 
 jobs:
   test:
-    name: Python ${{ matrix.python-version }} tests
+    name: Python ${{ matrix.python-version }} old_tests
     runs-on: ubuntu-latest
 
     strategy:
@@ -67,6 +67,6 @@ jobs:
             python -m pip install -e .
           fi
 
-      - name: Run tests
+      - name: Run old_tests
         run: |
           python -m pytest -q
