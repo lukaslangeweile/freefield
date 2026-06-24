@@ -1,6 +1,7 @@
 name: Tests
 
 on:
+  push:
   pull_request:
     branches:
       - main
@@ -11,7 +12,7 @@ on:
       - "setup.py"
       - "setup.cfg"
       - "requirements*.txt"
-      - ".github/workflows/old_tests.yml"
+      - ".github/workflows/tests.yml"
 
   push:
     branches:
@@ -23,7 +24,7 @@ on:
       - "setup.py"
       - "setup.cfg"
       - "requirements*.txt"
-      - ".github/workflows/old_tests.yml"
+      - ".github/workflows/tests.yml"
 
   workflow_dispatch:
 
