@@ -3,6 +3,7 @@ name: Tests
 on:
   pull_request:
     branches:
+      - tests
       - main
       - master
     paths:
@@ -15,6 +16,7 @@ on:
 
   push:
     branches:
+      - tests
       - main
       - master
     paths:
