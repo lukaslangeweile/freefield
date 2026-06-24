@@ -31,7 +31,7 @@ on:
 
 jobs:
   test:
-    name: Python ${{ matrix.python-version }} old_tests
+    name: Python ${{ matrix.python-version }} tests
     runs-on: ubuntu-latest
 
     strategy:
@@ -69,6 +69,6 @@ jobs:
             python -m pip install -e .
           fi
 
-      - name: Run old_tests
+      - name: Run tests
         run: |
           python -m pytest -q
