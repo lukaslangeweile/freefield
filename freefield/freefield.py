@@ -122,8 +122,8 @@ def read_speaker_table():
     for row in table:
         speakers.append(Speaker(index=int(row[0]), analog_channel=int(row[1]), analog_proc=row[2],
                                 azimuth=float(row[3]), elevation=float(row[4]), distance=float(row[5]),
-                                digital_channel=float(row[5]) if row[5] else None,
-                                digital_proc=row[6] if row[6] else None))
+                                digital_channel=float(row[6]) if row[6] else None,
+                                digital_proc=row[7] if row[7] else None))
     return speakers
 
 
