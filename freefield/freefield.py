@@ -833,7 +833,7 @@ def spectral_range(signal, bandwidth=1 / 5, low_cutoff=50, high_cutoff=20000, th
                    plot=True, log=True):
     """
     Compute the range of differences in power spectrum for all channels in
-    the signal. The signal is devided into bands of equivalent rectangular
+    the signal. The signal is divided into bands of equivalent rectangular
     bandwidth (ERB - see More& Glasberg 1982) and the level is computed for
     each frequency band and each channel in the recording. To show the range
     of spectral difference across channels the minimum and maximum levels
