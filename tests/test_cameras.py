@@ -1,0 +1,100 @@
+"""
+Script for testing the functions of cameras.py
+TODO:
+    - initialize:
+        - accepts "flir" and "webcam"
+        - is case-insensitive:
+            - "FLIR", "Flir", "WEBCAM", ... are accepted
+        - returns / constructs FlirCams for "flir"
+        - returns / constructs WebCams for "webcam"
+        - raises ValueError for unsupported camera type
+    - Cameras():
+        - __init__:
+            - sets imsize to None
+            - sets model to None
+            - sets calibration to {}
+            - sets n_cams to None
+        - set_detection_threshold:
+            - sets model.threshold to supplied value
+        - get_head_pose:
+            - raises ImportError if model is None
+            - calls acquire_images with requested n_images
+            - calls model.pose_from_image once per image and camera
+            - stores returned azimuth/elevation in correct order
+            - calls change_image_res for every image if resolution < 1
+            - does not call change_image_res if resolution == 1
+            - calls convert_coordinates if convert=True
+            - does not call convert_coordinates if convert=False
+            - averages along specified average_axis
+            - does not average if average_axis=None
+            - returns expected pose array / shape
+        - change_image_res:
+            - resolution=1 returns array with original dimensions
+            - resolution=0.5 returns array with half dimensions
+            - other valid fractions produce expected dimensions
+            - resolution=0 raises an error
+            - returns numpy.ndarray
+            - preserves expected image dimensionality
+            - optionally: test one representative uint8 grayscale image
+        - convert_coordinates:
+            - raises ValueError if calibration is empty
+            - converts azimuth using correct calibration coefficients
+            - converts elevation using correct calibration coefficients
+            - uses correct calibration for each camera
+            - converts all images in pose array
+            - returns expected converted array
+        - calibrate:
+            - raises ValueError if world_coordinates and camera_coordinates
+              have different lengths
+            - creates calibration entry for every camera
+            - creates azimuth and elevation entries
+            - stores expected intercept a
+            - stores expected slope b
+            - calibrates cameras independently
+            - logs warning if abs(correlation) < 0.85
+            - does not log correlation warning for sufficiently correlated data
+            - plot=False does not call plotting functions
+            - optionally: plot=True calls plt.show()
+    - FlirCams:
+        - __init__:
+            - raises ValueError if PySpin is unavailable
+            - model=None if headpose is unavailable
+            - creates PoseEstimator if headpose is available
+            - initializes detected cameras
+            - sets n_cams correctly
+            - sets imsize from acquired image
+            - no-camera behavior / cleanup should be tested
+              NOTE: current implementation likely has an issue here
+        - acquire_images:
+            - hardware-independent tests using mocked PySpin objects
+            - returns expected shape for n_images and n_cams
+            - returns uint8 image data
+            - raises ValueError if acquisition node is unavailable/unwritable
+            - raises ValueError if continuous mode is unavailable/unreadable
+            - raises ValueError for incomplete image
+            - calls BeginAcquisition / EndAcquisition
+            - releases acquired image
+            - postponable until FLIR-specific tests
+        - halt:
+            - DeInit called for initialized cameras
+            - cameras list cleared
+            - PySpin system released
+    - WebCams:
+        - __init__:
+            - model=None if headpose unavailable
+            - creates PoseEstimator if headpose available
+            - detects mocked cameras
+            - sets n_cams correctly
+            - sets imsize from acquired image
+            - hardware-independent tests via mocked cv2.VideoCapture
+        - acquire_images:
+            - returns expected shape for n_images and n_cams
+            - converts RGB/BGR images to grayscale
+            - does not convert already grayscale image
+            - calls grab / retrieve
+            - logs warning if image acquisition fails
+            - postponable until webcam-specific tests
+        - halt:
+            - calls release on every webcam
+
+"""

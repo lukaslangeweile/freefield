@@ -77,6 +77,8 @@ class Cameras:
         return pose
 
     def change_image_res(self, image, resolution):
+        if resolution <= 0:
+            raise ValueError("Resolution can't be smaller or equal to zero!")
         image = PIL.Image.fromarray(image)
         width = int(self.imsize[1] * resolution)
         height = int(self.imsize[0] * resolution)
