@@ -82,7 +82,10 @@ class Cameras:
         image = PIL.Image.fromarray(image)
         width = int(self.imsize[1] * resolution)
         height = int(self.imsize[0] * resolution)
-        image = image.resize((width, height), PIL.Image.ANTIALIAS)
+        image = image.resize(
+            (width, height),
+            PIL.Image.Resampling.LANCZOS,
+        )
         return numpy.asarray(image)
 
     def convert_coordinates(self, pose):
@@ -232,7 +235,7 @@ class WebCams(Cameras):
                 for i in range(cv2.CAP_PROP_FRAME_COUNT):
                     cam.grab()
                 ret, image = cam.retrieve()
-                if image.shape[-1] == 3:
+                if image.ndim == 3 and image.shape[-1] == 3:
                     image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
                 if ret is False:
                     logging.warning("could not acquire image...")
