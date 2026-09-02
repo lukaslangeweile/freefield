@@ -22,6 +22,7 @@ from freefield import DIR
 
 logging.basicConfig(level=logging.INFO)
 slab.Signal.set_default_samplerate(48828)  # default samplerate for generating sounds, filters etc.
+
 # Initialize global variables:
 CAMERAS = None
 PROCESSORS = None
