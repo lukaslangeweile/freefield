@@ -28,7 +28,7 @@ setup(name='freefield',
                                   'data/rcx/*', 'data/models/*',
                                   'data/models/pose_model/*',
                                   'data/models/pose_model/variables/*',
-                                  'tests/*', 'tests/images/*']},
+                                  'old_tests/*', 'old_tests/images/*']},
       include_package_data=True,
       zip_safe=False)
 
