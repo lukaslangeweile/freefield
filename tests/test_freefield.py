@@ -4,6 +4,7 @@ import slab
 import pickle
 
 import freefield.freefield as ff
+import freefield.setups as setups
 
 import matplotlib
 
@@ -412,14 +413,22 @@ def test_load_equalization_ignores_filter_if_false(
     assert load_equalization_speakers[3].level == 64.0
     assert load_equalization_speakers[3].filter is None
 
-
+@pytest.fixture
+def test_setup():
+    return setups.Setup(
+        name="test_setup",
+        speaker_table="tables/speakertable_test_setup.txt",
+        calibration_file="calibration_test_setup.pkl",
+        playback_processors=("RX81", "RX82"),
+        recording_processor="RP2",
+    )
 def test_load_equalization_uses_default_file(
     tmp_path,
     load_equalization_speakers,
     monkeypatch,
+    test_setup
 ):
     # Arrange
-    setup = "test_setup"
 
     monkeypatch.setattr(
         ff,
@@ -430,7 +439,7 @@ def test_load_equalization_uses_default_file(
     monkeypatch.setattr(
         ff,
         "SETUP",
-        setup,
+        test_setup,
     )
 
     data_directory = tmp_path / "data"
@@ -438,7 +447,7 @@ def test_load_equalization_uses_default_file(
 
     equalization_file = (
         data_directory
-        / f"calibration_{setup}.pkl"
+        / "calibration_test_setup.pkl"
     )
 
     equalization = {
@@ -729,6 +738,7 @@ def test_pick_speakers_returns_empty_list_for_empty_selection(
 
 def test_read_speaker_table_assigns_columns_correctly(
     monkeypatch,
+    test_setup
 ):
     # Arrange
     table = np.array(
@@ -755,6 +765,12 @@ def test_read_speaker_table_assigns_columns_correctly(
             ],
         ],
         dtype=str,
+    )
+
+    monkeypatch.setattr(
+        ff,
+        "SETUP",
+        test_setup,
     )
 
     monkeypatch.setattr(

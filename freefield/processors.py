@@ -58,62 +58,37 @@ class Processors(object):
 
     def initialize_default(self, mode):
         setup = freefield.SETUP
-        if mode.lower() == 'play_rec':
-            if setup == "cathedral":
-                proc_list = [['RP2', 'RP2', DIR / 'data' / 'rcx' / 'rec_buf.rcx'],
-                             ['RX81', 'RX8', DIR / 'data' / 'rcx' / 'play_buf.rcx']]
-            else:
-                proc_list = [['RP2', 'RP2', DIR / 'data' / 'rcx' / 'rec_buf.rcx'],
-                             ['RX81', 'RX8', DIR / 'data' / 'rcx' / 'play_buf.rcx'],
-                             ['RX82', 'RX8', DIR / 'data' / 'rcx' / 'play_buf.rcx']]
-        elif mode.lower() == "play_birec":
-            if setup == "cathedral":
-                proc_list = [['RP2', 'RP2', DIR / 'data' / 'rcx' / 'bi_rec_buf.rcx'],
-                             ['RX81', 'RX8', DIR / 'data' / 'rcx' / 'play_buf.rcx']]
-            else:
-                proc_list = [['RP2', 'RP2',  DIR/'data'/'rcx'/'bi_rec_buf.rcx'],
-                             ['RX81', 'RX8', DIR/'data'/'rcx'/'play_buf.rcx'],
-                             ['RX82', 'RX8', DIR/'data'/'rcx'/'play_buf.rcx']]
-        elif mode.lower() == "bi_play_rec":
-            if setup == "cathedral":
-                proc_list = [['RP2', 'RP2', DIR / 'data' / 'rcx' / 'bi_play_rec_buf.rcx'],
-                             ['RX81', 'RX8', DIR / 'data' / 'rcx' / 'bits.rcx']]
-            else:
-                proc_list = [['RP2', 'RP2',  DIR/'data'/'rcx'/'bi_play_rec_buf.rcx'],
-                            ['RX81', 'RX8', DIR / 'data' / 'rcx' / 'bits.rcx'],
-                            ['RX82', 'RX8', DIR / 'data' / 'rcx' / 'bits.rcx']]
-        elif mode.lower() == "loctest_freefield":
-            if setup == "cathedral":
-                proc_list = [['RP2', 'RP2', DIR / 'data' / 'rcx' / 'button.rcx'],
-                             ['RX81', 'RX8', DIR / 'data' / 'rcx' / 'play_buf.rcx']]
-            else:
-                proc_list = [['RP2', 'RP2',  DIR/'data'/'rcx'/'button.rcx'],
-                             ['RX81', 'RX8', DIR/'data'/'rcx'/'play_buf.rcx'],
-                             ['RX82', 'RX8', DIR/'data'/'rcx'/'play_buf.rcx']]
-        elif mode.lower() == "loctest_headphones":
-            if setup == "cathedral":
-                proc_list = [['RP2', 'RP2', DIR / 'data' / 'rcx' / 'bi_play_buf.rcx'],
-                             ['RX81', 'RX8', DIR / 'data' / 'rcx' / 'bits.rcx']]
-            else:
-                proc_list = [['RP2', 'RP2',  DIR/'data'/'rcx'/'bi_play_buf.rcx'],
-                             ['RX81', 'RX8', DIR/'data'/'rcx'/'bits.rcx'],
-                             ['RX82', 'RX8', DIR/'data'/'rcx'/'bits.rcx']]
-        elif mode.lower() == "cam_calibration":
-            if setup == "cathedral":
-                proc_list = [['RP2', 'RP2', DIR / 'data' / 'rcx' / 'button.rcx'],
-                             ['RX81', 'RX8', DIR / 'data' / 'rcx' / 'bits.rcx']]
-            else:
-                proc_list = [['RP2', 'RP2',  DIR/'data'/'rcx'/'button.rcx'],
-                               ['RX81', 'RX8', DIR/'data'/'rcx'/'bits.rcx'],
-                               ['RX82', 'RX8', DIR/'data'/'rcx'/'bits.rcx']]
-        else:
-            raise ValueError(f'mode {mode} is not a valid input!')
+
+        if setup is None:
+            raise RuntimeError(
+                "No setup initialized. Call freefield.initialize() first."
+            )
+
+        mode = mode.lower()
+
+        if mode not in setup.default_modes:
+            raise ValueError(
+                f"Mode {mode!r} is not available for setup {setup.name!r}.")
+
+        mode_config = setup.default_modes[mode]
+
+        proc_list = [
+            [
+                processor.name,
+                processor.model,
+                DIR / "data" / "rcx" / processor.circuit,
+            ]
+            for processor in mode_config.processors
+        ]
+
         self.mode = mode
-        logging.debug(f'set mode to {mode}')
-        if setup == "cathedral":
-            self.initialize(proc_list, False, "USB")
-        else:
-            self.initialize(proc_list, True, "GB")
+        logging.debug(f"set mode to {mode}")
+
+        self.initialize(
+            proc_list,
+            mode_config.zbus,
+            mode_config.connection,
+        )
 
     def write(self, tag, value, processors):
         if isinstance(value, (np.int32, np.int64)):
