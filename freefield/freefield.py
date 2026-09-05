@@ -775,58 +775,6 @@ def test_equalization(speakers="all"):
         rec_full.append(play_and_record(speaker, full_equalized, equalize=False))
     return slab.Sound(rec_raw), slab.Sound(rec_level), slab.Sound(rec_full)
 
-def _distance_array_level_equalization(speakers, sounds, algorithm, birec):
-    """
-    Record the signal from each speaker in the list and return the level of each
-    speaker relative to the target speaker(target speaker must be in the list)
-    """
-
-    equalization_levels = []
-
-    for speaker in speakers:
-        equalization_levels_sounds = []
-        for i, sound in enumerate(sounds):
-            logging.info(f"Starting equalization for speaker {speaker.index}, sound number {i}.")
-            stairs = slab.Staircase(start_val=(70 + speaker.index*2), n_reversals=10,
-                                    step_sizes=[5, 3, 1])
-            for level in stairs:
-                adapted_sound = slab.Sound(sound.data)
-                adapted_sound.level = level
-                recording = play_and_record(speaker, adapted_sound, equalize=False, compensate_delay=True)
-                sound_parameter, recording_parameter = _get_distance_array_level_algorithm_parameters(algorithm, sound,
-                                                            recording)
-                logging.debug(f'Level of played sound = {adapted_sound.level}')
-                logging.debug(f'recording_paramteter = {recording_parameter}, sound_parameter = {sound_parameter}')
-                if recording_parameter > sound_parameter:
-                    stairs.add_response(1)
-                else:
-                    stairs.add_response(0)
-                if SETUP.reverb_wait:  # otherwise reverb of previous sounds would disturb equalization
-                    time.sleep(SETUP.reverb_wait)
-            equalization_levels_sounds.append(stairs.threshold())
-            logging.info(f"Equalization for speaker {speaker.index}, sound number {i} finished.")
-        equalization_levels.append(np.mean(equalization_levels_sounds))
-    return equalization_levels
-
-def _get_distance_array_level_algorithm_parameters(algorithm, sound, recording):
-    if algorithm.lower() == "rms":
-        sound_parameter = np.sqrt(np.mean(np.square(sound.data)))
-        recording_parameter = np.sqrt(np.mean(np.square(recording.data)))
-    elif algorithm.lower() == "dbfs":
-        sound_parameter = np.max(np.abs(sound.data))
-        recording_parameter = np.max(np.abs(recording.data))
-    elif algorithm.lower() == "lufs":
-        meter_sound = pyloudnorm.Meter(sound.samplerate)
-        meter_recording = pyloudnorm.Meter(recording.samplerate)
-        if sound.duration < 0.400:
-            meter_sound.block_size = 0.100
-            meter_recording.block_size = 0.100
-        sound_parameter = meter_sound.integrated_loudness(sound.data)
-        recording_parameter = meter_recording.integrated_loudness(recording.data)
-    else:
-        logging.warning(f"There is no algorithm {algorithm}. Choose from RMS, dBFS or LUFS.")
-        return
-    return sound_parameter, recording_parameter
 
 def spectral_range(signal, bandwidth=1 / 5, low_cutoff=50, high_cutoff=20000, thresh=3,
                    plot=True, log=True):
