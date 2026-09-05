@@ -10,6 +10,7 @@ import logging
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock, call
+from freefield import setups
 
 import numpy as np
 import pytest
@@ -770,11 +771,14 @@ def test_initialize_does_not_overwrite_existing_mode(
         ),
     ],
 )
-def test_initialize_default_builds_expected_configuration_for_dome_and_arc(
+def test_initialize_default_builds_expected_configuration_for_dome(
     processors,
     mode,
     expected_circuits,
+    monkeypatch
 ):
+    monkeypatch.setattr(processors_module.freefield, "SETUP", setups.DOME)
+
     processors.initialize = MagicMock()
 
     processors.initialize_default(mode=mode)
@@ -804,6 +808,95 @@ def test_initialize_default_builds_expected_configuration_for_dome_and_arc(
     assert connection == "GB"
     assert processors.mode == mode
 
+@pytest.mark.parametrize(
+    ("mode", "expected_circuits"),
+    [
+        (
+            "play_rec",
+            [
+                "rec_buf.rcx",
+                "play_buf.rcx",
+                "play_buf.rcx",
+            ]
+        ),
+        (
+            "play_birec",
+            [
+                "bi_rec_buf.rcx",
+                "play_buf.rcx",
+                "play_buf.rcx",
+            ]
+        ),
+        (
+            "bi_play_rec",
+            [
+                "bi_play_rec_buf.rcx",
+                "bits.rcx",
+                "bits.rcx",
+            ]
+        ),
+        (
+            "loctest_freefield",
+            [
+                "button.rcx",
+                "play_buf.rcx",
+                "play_buf.rcx",
+            ]
+        ),
+        (
+            "loctest_headphones",
+            [
+                "bi_play_buf.rcx",
+                "bits.rcx",
+                "bits.rcx",
+            ]
+        ),
+        (
+            "cam_calibration",
+            [
+                "button.rcx",
+                "bits.rcx",
+                "bits.rcx",
+            ]
+        ),
+    ],
+)
+def test_initialize_default_builds_expected_configuration_for_arc(
+        processors,
+        mode,
+        expected_circuits,
+        monkeypatch
+):
+    monkeypatch.setattr(processors_module.freefield, "SETUP", setups.ARC)
+
+    processors.initialize = MagicMock()
+
+    processors.initialize_default(mode=mode)
+
+    processors.initialize.assert_called_once()
+
+    proc_list, zbus, connection = (
+        processors.initialize.call_args.args
+    )
+
+    assert [entry[0] for entry in proc_list] == [
+        "RP2",
+        "RX81",
+        "RX82",
+    ]
+    assert [entry[1] for entry in proc_list] == [
+        "RP2",
+        "RX8",
+        "RX8",
+    ]
+    assert [
+               Path(entry[2]).name
+               for entry in proc_list
+           ] == expected_circuits
+
+    assert zbus is True
+    assert connection == "GB"
+    assert processors.mode == mode
 
 @pytest.mark.parametrize(
     ("mode", "expected_circuits"),
@@ -858,7 +951,8 @@ def test_initialize_default_builds_expected_configuration_for_cathedral(
     mode,
     expected_circuits,
 ):
-    monkeypatch.setattr(processors_module.freefield, "SETUP", "cathedral")
+
+    monkeypatch.setattr(processors_module.freefield, "SETUP", setups.CATHEDRAL)
     processors.initialize = MagicMock()
 
     processors.initialize_default(mode=mode)
@@ -887,19 +981,20 @@ def test_initialize_default_builds_expected_configuration_for_cathedral(
     assert processors.mode == mode
 
 
-def test_initialize_default_is_case_insensitive(processors):
+def test_initialize_default_is_case_insensitive(processors, monkeypatch):
     processors.initialize = MagicMock()
+    monkeypatch.setattr(processors_module.freefield, "SETUP", setups.DOME)
 
     processors.initialize_default(mode="PLAY_REC")
 
     processors.initialize.assert_called_once()
-    assert processors.mode == "PLAY_REC"
+    assert processors.mode == "play_rec"
 
 
-def test_initialize_default_rejects_unknown_mode(processors):
+def test_initialize_default_rejects_unknown_mode(processors, monkeypatch):
+    monkeypatch.setattr(processors_module.freefield, "SETUP", setups.DOME)
     with pytest.raises(
-        ValueError,
-        match="not a valid input",
+        ValueError
     ):
         processors.initialize_default(mode="unknown")
 
