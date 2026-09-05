@@ -136,7 +136,7 @@ HEADPHONES = Setup(
 )
 
 
-CATHEDRAL = Setup(
+DISTANCE_ARRAY = Setup(
     name="cathedral",
     speaker_table="tables/speakertable_cathedral.txt",
     calibration_file="calibration_cathedral.pkl",
@@ -205,6 +205,6 @@ CATHEDRAL = Setup(
 SETUPS = {
     "dome": DOME,
     "arc": ARC,
-    "cathedral": CATHEDRAL,
+    "distance_array": DISTANCE_ARRAY,
     "headphones": HEADPHONES
 }

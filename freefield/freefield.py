@@ -38,9 +38,9 @@ def initialize(setup, default=None, device=None, zbus=True, connection="GB", cam
     the setup runs until `halt()` is called. Initialzing device which are already running will flush them.
 
     Arguments:
-        setup (str): which setup to load, can be 'dome', 'arc', 'cathedral' or 'headphones'
+        setup (str): which setup to load, can be 'dome', 'arc', 'distance_array' or 'headphones'
         default (str | None): initialize the setup using one of the default settings which are:
-            'play_rec': play sounds using two RX8s (or one RX8 in case of the cathedral setup) and record them with a RP2
+            'play_rec': play sounds using two RX8s (or one RX8 in case of the distance_array setup) and record them with a RP2
             'play_birec': same as 'play_rec' but record from two microphone channels
             'loctest_freefield': sound localization test under freefield conditions
             'loctest_headphones': localization test with headphones
@@ -409,7 +409,7 @@ def flush_buffers(processor, maximum_n_samples=80000):
     n_buffer_dict = {"bi_play_buf.rcx": 2,
                         "play_buf.rcx": 1,
                         "play_buf_msl.rcx": 5,
-                        "cathedral_play_buf.rcx": 8}
+                        "distance_array_play_buf.rcx": 8}
     circuit = os.path.basename(PROCESSORS.rcx_dict.get(processor))
 
     if n_buffer_dict.get(circuit) == 1:
@@ -775,7 +775,7 @@ def test_equalization(speakers="all"):
         rec_full.append(play_and_record(speaker, full_equalized, equalize=False))
     return slab.Sound(rec_raw), slab.Sound(rec_level), slab.Sound(rec_full)
 
-def _cathedral_level_equalization(speakers, sounds, algorithm, birec):
+def _distance_array_level_equalization(speakers, sounds, algorithm, birec):
     """
     Record the signal from each speaker in the list and return the level of each
     speaker relative to the target speaker(target speaker must be in the list)
@@ -793,7 +793,7 @@ def _cathedral_level_equalization(speakers, sounds, algorithm, birec):
                 adapted_sound = slab.Sound(sound.data)
                 adapted_sound.level = level
                 recording = play_and_record(speaker, adapted_sound, equalize=False, compensate_delay=True)
-                sound_parameter, recording_parameter = _get_cathedral_level_algorithm_parameters(algorithm, sound,
+                sound_parameter, recording_parameter = _get_distance_array_level_algorithm_parameters(algorithm, sound,
                                                             recording)
                 logging.debug(f'Level of played sound = {adapted_sound.level}')
                 logging.debug(f'recording_paramteter = {recording_parameter}, sound_parameter = {sound_parameter}')
@@ -808,7 +808,7 @@ def _cathedral_level_equalization(speakers, sounds, algorithm, birec):
         equalization_levels.append(np.mean(equalization_levels_sounds))
     return equalization_levels
 
-def _get_cathedral_level_algorithm_parameters(algorithm, sound, recording):
+def _get_distance_array_level_algorithm_parameters(algorithm, sound, recording):
     if algorithm.lower() == "rms":
         sound_parameter = np.sqrt(np.mean(np.square(sound.data)))
         recording_parameter = np.sqrt(np.mean(np.square(recording.data)))

@@ -945,14 +945,14 @@ def test_initialize_default_builds_expected_configuration_for_arc(
         ),
     ],
 )
-def test_initialize_default_builds_expected_configuration_for_cathedral(
+def test_initialize_default_builds_expected_configuration_for_distance_array(
     monkeypatch,
     processors,
     mode,
     expected_circuits,
 ):
 
-    monkeypatch.setattr(processors_module.freefield, "SETUP", setups.CATHEDRAL)
+    monkeypatch.setattr(processors_module.freefield, "SETUP", setups.DISTANCE_ARRAY)
     processors.initialize = MagicMock()
 
     processors.initialize_default(mode=mode)
