@@ -38,7 +38,7 @@ def initialize(setup, default=None, device=None, zbus=True, connection="GB", cam
     the setup runs until `halt()` is called. Initialzing device which are already running will flush them.
 
     Arguments:
-        setup (str): which setup to load, can be 'dome', 'arc', 'distance_array' or 'headphones'
+        setup (str| setups.Setup()): which setup to load, can be 'dome', 'arc', 'distance_array' or 'headphones', also sccepts custom setups
         default (str | None): initialize the setup using one of the default settings which are:
             'play_rec': play sounds using two RX8s (or one RX8 in case of the distance_array setup) and record them with a RP2
             'play_birec': same as 'play_rec' but record from two microphone channels
@@ -65,7 +65,27 @@ def initialize(setup, default=None, device=None, zbus=True, connection="GB", cam
     # initialize device and environment
     from freefield.processors import Processors
     PROCESSORS = Processors()
-    SETUP = SETUPS[setup]
+
+    if isinstance(setup, str):
+        setup_name = setup.lower()
+
+        try:
+            SETUP = SETUPS[setup_name]
+        except KeyError:
+            raise ValueError(
+                f"Unknown setup {setup!r}. "
+                f"Available setups are: {', '.join(SETUPS)}"
+            )
+
+    elif isinstance(setup, Setup):
+        SETUP = setup
+
+    else:
+        raise TypeError(
+            f"Argument 'setup' must be a string or Setup object, "
+            f"got {type(setup).__name__} instead."
+        )
+
     # if bool(device) == bool(default):
     #     raise ValueError("You have to specify a device OR a default_mode")
     if device is not None:
