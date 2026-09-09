@@ -137,8 +137,8 @@ HEADPHONES = Setup(
 
 
 DISTANCE_ARRAY = Setup(
-    name="cathedral",
-    speaker_table="tables/speakertable_cathedral.txt",
+    name="distance_array",
+    speaker_table="tables/speakertable_distance_array.txt",
     calibration_file="calibration_cathedral.pkl",
     playback_processors=("RX81",),
     recording_processor="RP2",
