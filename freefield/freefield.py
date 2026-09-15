@@ -19,6 +19,7 @@ from matplotlib import pyplot as plt
 from matplotlib.axes import Axes
 
 from freefield import DIR
+from freefield.setups import Setup, SETUPS
 
 logging.basicConfig(level=logging.INFO)
 slab.Signal.set_default_samplerate(48828)  # default samplerate for generating sounds, filters etc.
@@ -28,7 +29,7 @@ CAMERAS = None
 PROCESSORS = None
 SENSOR = None
 SPEAKERS = []  # list of all the loudspeakers in the active setup
-SETUP = ""  # the currently active setup - "dome" or "arc"
+SETUP: Setup| None = None  # the currently active setup - "dome" or "arc"
 
 def initialize(setup, default=None, device=None, zbus=True, connection="GB", camera=None, sensor_tracking=False,
                calibration_file=None):
@@ -37,9 +38,9 @@ def initialize(setup, default=None, device=None, zbus=True, connection="GB", cam
     the setup runs until `halt()` is called. Initialzing device which are already running will flush them.
 
     Arguments:
-        setup (str): which setup to load, can be 'dome', 'arc', 'cathedral' or 'headphones'
+        setup (str| setups.Setup()): which setup to load, can be 'dome', 'arc', 'distance_array' or 'headphones', also sccepts custom setups
         default (str | None): initialize the setup using one of the default settings which are:
-            'play_rec': play sounds using two RX8s (or one RX8 in case of the cathedral setup) and record them with a RP2
+            'play_rec': play sounds using two RX8s (or one RX8 in case of the distance_array setup) and record them with a RP2
             'play_birec': same as 'play_rec' but record from two microphone channels
             'loctest_freefield': sound localization test under freefield conditions
             'loctest_headphones': localization test with headphones
@@ -64,7 +65,27 @@ def initialize(setup, default=None, device=None, zbus=True, connection="GB", cam
     # initialize device and environment
     from freefield.processors import Processors
     PROCESSORS = Processors()
-    SETUP = setup
+
+    if isinstance(setup, str):
+        setup_name = setup.lower()
+
+        try:
+            SETUP = SETUPS[setup_name]
+        except KeyError:
+            raise ValueError(
+                f"Unknown setup {setup!r}. "
+                f"Available setups are: {', '.join(SETUPS)}"
+            )
+
+    elif isinstance(setup, Setup):
+        SETUP = setup
+
+    else:
+        raise TypeError(
+            f"Argument 'setup' must be a string or Setup object, "
+            f"got {type(setup).__name__} instead."
+        )
+
     # if bool(device) == bool(default):
     #     raise ValueError("You have to specify a device OR a default_mode")
     if device is not None:
@@ -118,12 +139,12 @@ def read_speaker_table():
         (list): a list of instances of the `Speaker` class.
     """
     speakers = []
-    table_file = DIR / 'data' / 'tables' / Path(f'speakertable_{SETUP}.txt')
+    table_file = DIR / 'data' / 'tables' / SETUP.speaker_table
     table = np.loadtxt(table_file, skiprows=1, delimiter=",", dtype=str)
     for row in table:
         speakers.append(Speaker(index=int(row[0]), analog_channel=int(row[1]), analog_proc=row[2],
                                 azimuth=float(row[3]), elevation=float(row[4]), distance=float(row[5]),
-                                digital_channel=float(row[6]) if row[6] else None,
+                                digital_channel=int(row[6]) if row[6] else None,
                                 digital_proc=row[7] if row[7] else None))
     return speakers
 
@@ -138,7 +159,7 @@ def load_equalization(file=None, level=True, frequency=True):
             try to load the equalization from the default file.
     """
     if file is None:
-        file = DIR / 'data' / f'calibration_{SETUP}.pkl'
+        file = DIR / 'data' / SETUP.calibration_file
     else:
         file = Path(file)
     if file.exists():
@@ -408,7 +429,7 @@ def flush_buffers(processor, maximum_n_samples=80000):
     n_buffer_dict = {"bi_play_buf.rcx": 2,
                         "play_buf.rcx": 1,
                         "play_buf_msl.rcx": 5,
-                        "cathedral_play_buf.rcx": 8}
+                        "distance_array_play_buf.rcx": 8}
     circuit = os.path.basename(PROCESSORS.rcx_dict.get(processor))
 
     if n_buffer_dict.get(circuit) == 1:
@@ -440,25 +461,20 @@ def play_and_record(speaker, sound, compensate_delay=True, compensate_attenuatio
     """
     if PROCESSORS is None:
         raise RuntimeError("PROCESSORS is not initialized. Call freefield.initialize() first.")
-    if SETUP == "cathedral":
-        write(tag="playbuflen", value=sound.n_samples, processors=["RX81"])
-    else:
-        write(tag="playbuflen", value=sound.n_samples, processors=["RX81", "RX82"])
+    write(tag="playbuflen", value=sound.n_samples, processors=list(SETUP.playback_processors))
     if compensate_delay:
         n_delay = get_recording_delay(distance=speaker.distance, play_from="RX8", rec_from="RP2", sample_rate=recording_samplerate)
         n_delay += int(.00325 * recording_samplerate)  # empirically tested for 100kHz samplerate
     else:
         n_delay = 0
     rec_n_samples = int(sound.duration * recording_samplerate)
-    write(tag="playbuflen", value=rec_n_samples + n_delay, processors="RP2")
+    write(tag="playbuflen", value=rec_n_samples + n_delay, processors=SETUP.recording_processor)
     set_signal_and_speaker(sound, speaker, equalize)
-    if SETUP == "cathedral":
-        play(kind=1, proc="RP2")
-        play(kind=1, proc="RX81")
-    else:
+    if PROCESSORS._zbus:
         play()
+    else:
+        play(kind=1, proc=list(SETUP.playback_processors))
     wait_to_finish_playing()
-    flush_buffers(speaker.analog_proc)
     if PROCESSORS.mode == "play_rec":  # read the data from buffer and skip the first n_delay samples
         rec = read(tag='data', processor='RP2', n_samples=rec_n_samples + n_delay)[n_delay:]
         rec = slab.Sound(rec, samplerate=recording_samplerate)
@@ -617,10 +633,12 @@ def equalize_headphones(bandwidth=1/10, threshold=.3, low_cutoff=100, high_cutof
            file_name (string): Name of the file to store equalization parameters.
 
        """
+    if not PROCESSORS:
+        raise RuntimeError("PROCESSORS is not initialized. Call freefield.initialize() first.")
     global SETUP
+    SETUP = Setup("headphones")
     if not PROCESSORS.mode == "bi_play_rec":
         PROCESSORS.initialize_default(mode="bi_play_rec")
-        SETUP = 'headphones'
     sound = slab.Binaural.chirp(duration=0.1, level=85, from_frequency=low_cutoff, to_frequency=high_cutoff, kind='linear')
     speakers = SPEAKERS
     # reference_speaker = 'left'
@@ -658,9 +676,9 @@ def equalize_headphones(bandwidth=1/10, threshold=.3, low_cutoff=100, high_cutof
     equalization = {f"{speakers[i].index}": {"level": equalization_levels[i], "filter": filter_bank.channel(i)}
                     for i in range(len(speakers))}
     if file_name is None:  # use the default filename and rename teh existing file
-        file_name = DIR / 'data' / f'calibration_{SETUP}.pkl'
+        file_name = DIR / 'data' / SETUP.calibration_file
     else:
-        file_name = DIR / 'data' / f'calibration_{SETUP}_{file_name}.pkl'
+        file_name = DIR / 'data' / f'calibration_{SETUP.name}_{file_name}.pkl'
     # if file_name.exists():  # move the old calibration to the log folder
         # date = datetime.datetime.now().strftime("_%Y-%m-%d-%H-%M-%S")
         # file_name = file_name.parent / (file_name.stem + date + file_name.suffix)
@@ -708,7 +726,7 @@ def equalize_speakers(speakers="all", reference_speaker=23, bandwidth=1 / 10, th
     equalization = {f"{speakers[i].index}": {"level": equalization_levels[i], "filter": filter_bank.channel(i)}
                     for i in range(len(speakers))}
     if file_name is None:  # use the default filename and rename teh existing file
-        file_name = DIR / 'data' / f'calibration_{SETUP}.pkl'
+        file_name = DIR / 'data' / SETUP.calibration_file
     else:
         file_name = Path(file_name)
     if file_name.exists():  # move the old calibration to the log folder
@@ -777,58 +795,6 @@ def test_equalization(speakers="all"):
         rec_full.append(play_and_record(speaker, full_equalized, equalize=False))
     return slab.Sound(rec_raw), slab.Sound(rec_level), slab.Sound(rec_full)
 
-def _cathedral_level_equalization(speakers, sounds, algorithm, birec):
-    """
-    Record the signal from each speaker in the list and return the level of each
-    speaker relative to the target speaker(target speaker must be in the list)
-    """
-
-    equalization_levels = []
-
-    for speaker in speakers:
-        equalization_levels_sounds = []
-        for i, sound in enumerate(sounds):
-            logging.info(f"Starting equalization for speaker {speaker.index}, sound number {i}.")
-            stairs = slab.Staircase(start_val=(70 + speaker.index*2), n_reversals=10,
-                                    step_sizes=[5, 3, 1])
-            for level in stairs:
-                adapted_sound = slab.Sound(sound.data)
-                adapted_sound.level = level
-                recording = play_and_record(speaker, adapted_sound, equalize=False, compensate_delay=True)
-                sound_parameter, recording_parameter = _get_cathedral_level_algorithm_parameters(algorithm, sound,
-                                                            recording)
-                logging.debug(f'Level of played sound = {adapted_sound.level}')
-                logging.debug(f'recording_paramteter = {recording_parameter}, sound_parameter = {sound_parameter}')
-                if recording_parameter > sound_parameter:
-                    stairs.add_response(1)
-                else:
-                    stairs.add_response(0)
-                if SETUP == "cathedral":  # otherwise reverb of previous sounds would disturb equalization
-                    time.sleep(2.7)
-            equalization_levels_sounds.append(stairs.threshold())
-            logging.info(f"Equalization for speaker {speaker.index}, sound number {i} finished.")
-        equalization_levels.append(np.mean(equalization_levels_sounds))
-    return equalization_levels
-
-def _get_cathedral_level_algorithm_parameters(algorithm, sound, recording):
-    if algorithm.lower() == "rms":
-        sound_parameter = np.sqrt(np.mean(np.square(sound.data)))
-        recording_parameter = np.sqrt(np.mean(np.square(recording.data)))
-    elif algorithm.lower() == "dbfs":
-        sound_parameter = np.max(np.abs(sound.data))
-        recording_parameter = np.max(np.abs(recording.data))
-    elif algorithm.lower() == "lufs":
-        meter_sound = pyloudnorm.Meter(sound.samplerate)
-        meter_recording = pyloudnorm.Meter(recording.samplerate)
-        if sound.duration < 0.400:
-            meter_sound.block_size = 0.100
-            meter_recording.block_size = 0.100
-        sound_parameter = meter_sound.integrated_loudness(sound.data)
-        recording_parameter = meter_recording.integrated_loudness(recording.data)
-    else:
-        logging.warning(f"There is no algorithm {algorithm}. Choose from RMS, dBFS or LUFS.")
-        return
-    return sound_parameter, recording_parameter
 
 def spectral_range(signal, bandwidth=1 / 5, low_cutoff=50, high_cutoff=20000, thresh=3,
                    plot=True, log=True):
