@@ -2,30 +2,60 @@ from mpl_toolkits.mplot3d import Axes3D
 import matplotlib.pyplot as plt
 import numpy as np
 import freefield
+import slab
 
+def plot_speaker_table(setup):
 
-def plot_sources(azimuth, elevation, distance=1.6):
-    """Display sources in a 3D plot
+def plot_sources(azimuth, elevation, distance=1.4):
+    """Display sources in a 3D plot.
+
     Arguments:
-        azimuth (np.ndarray): azimuth of the sources in degree. Must be same length as elevation
-        elevation (np.ndarray): elevation of the sources in degree. Must be same length as azimuth
-        distance (float | np.ndarray): distance of the sources to the listener. Can be either an array
-            with the same length as azimuth and elevation or a single float if all sources have the same
-            distance - meaning they are arranged in a sphere or circle. """
-    ax = Axes3D(plt.figure())
+        azimuth (np.ndarray): Azimuth of the sources in degrees.
+            Must have the same length as elevation.
+        elevation (np.ndarray): Elevation of the sources in degrees.
+            Must have the same length as azimuth.
+        distance (float | np.ndarray): Distance of the sources to the listener.
+            Can either be an array with the same length as azimuth and elevation,
+            or a single float if all sources have the same distance.
+    """
+    fig = plt.figure()
+    ax = fig.add_subplot(111, projection="3d")
+
     azimuth = np.deg2rad(azimuth)
-    elevation = np.deg2rad(elevation-90)
+    elevation = np.deg2rad(elevation - 90)
+
     x = distance * np.sin(elevation) * np.cos(azimuth)
     y = distance * np.sin(elevation) * np.sin(azimuth)
     z = distance * np.cos(elevation)
-    ax.scatter(x, y, z, c='b', marker='.')
-    ax.scatter(0, 0, 0, c='r', marker='o')
+
+    # Use the same scale for all axes
+    max_range = max(
+        np.ptp(x),
+        np.ptp(y),
+        np.ptp(z),
+    )
+
+    x_mid = (np.max(x) + np.min(x)) / 2
+    y_mid = (np.max(y) + np.min(y)) / 2
+    z_mid = (np.max(z) + np.min(z)) / 2
+
+    ax.set_xlim(x_mid - max_range / 2, x_mid + max_range / 2)
+    ax.set_ylim(y_mid - max_range / 2, y_mid + max_range / 2)
+    ax.set_zlim(z_mid - max_range / 2, z_mid + max_range / 2)
+
+    ax.set_box_aspect((1, 1, 1))
+
+    ax.scatter(x, y, z, c="b", marker=".")
+    ax.scatter(0, 0, 0, c="r", marker="o")
+
+    return fig, ax
 
 
 if __name__ == '__main__':
-    speakers = freefield.read_table("dome")
-    azi = np.array(speakers["azi"].to_list())
-    ele = np.array(speakers["ele"].to_list())
+    speakers = freefield.read_speaker_table()
+    azi = np.array([speaker.azimuth for speaker in speakers])
+    ele = np.array([speaker.elevation for speaker in speakers])
+    dis = np.array([speaker.distance for speaker in speakers])
     plot_sources(azi, ele)
 
 # def _plot_equalization(target, signal, filt, speaker_nr, low_cutoff=50,
