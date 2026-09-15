@@ -1,4 +1,5 @@
 from __future__ import annotations
+from typing import Dict, Optional, Tuple
 from dataclasses import dataclass, field
 
 
@@ -11,7 +12,7 @@ class ProcessorConfig:
 
 @dataclass(frozen=True)
 class ModeConfig:
-    processors: tuple[ProcessorConfig, ...]
+    processors: Tuple[ProcessorConfig, ...]
     zbus: bool = True
     connection: str = "GB"
 
@@ -22,13 +23,13 @@ class Setup:
     speaker_table: str
     calibration_file: str
 
-    playback_processors: tuple[str, ...]
-    recording_processor: str | None
+    playback_processors: Tuple[str, ...]
+    recording_processor: Optional[str]
 
-    center_speaker: int | None = None
+    center_speaker: Optional[int] = None
     reverb_wait: float = 0.0
 
-    default_modes: dict[str, ModeConfig] = field(default_factory=dict)
+    default_modes: Dict[str, ModeConfig] = field(default_factory=dict)
 
 
 # -------------------------------------------------------------------------
