@@ -105,7 +105,7 @@ FREEFIELD_STANDARD_MODES = {
 
 DOME = Setup(
     name="dome",
-    speaker_table="tables/speakertable_dome.txt",
+    speaker_table="speakertable_dome.txt",
     calibration_file="calibration_dome.pkl",
     playback_processors=("RX81", "RX82"),
     recording_processor="RP2",
@@ -117,7 +117,7 @@ DOME = Setup(
 
 ARC = Setup(
     name="arc",
-    speaker_table="tables/speakertable_arc.txt",
+    speaker_table="speakertable_arc.txt",
     calibration_file="calibration_arc.pkl",
     playback_processors=("RX81", "RX82"),
     recording_processor="RP2",
@@ -128,7 +128,7 @@ ARC = Setup(
 
 HEADPHONES = Setup(
     name="arc",
-    speaker_table="tables/speakertable_arc.txt",
+    speaker_table="speakertable_arc.txt",
     calibration_file="calibration_arc.pkl",
     playback_processors=("RX81", "RX82"),
     recording_processor="RP2",
@@ -140,7 +140,7 @@ HEADPHONES = Setup(
 
 DISTANCE_ARRAY = Setup(
     name="distance_array",
-    speaker_table="tables/speakertable_distance_array.txt",
+    speaker_table="speakertable_distance_array.txt",
     calibration_file="calibration_cathedral.pkl",
     playback_processors=("RX81",),
     recording_processor="RP2",

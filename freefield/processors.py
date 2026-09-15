@@ -56,8 +56,7 @@ class Processors(object):
         if self.mode is None:
             self.mode = "custom"
 
-    def initialize_default(self, mode):
-        setup = freefield.SETUP
+    def initialize_default(self,setup, mode):
 
         if setup is None:
             raise RuntimeError(

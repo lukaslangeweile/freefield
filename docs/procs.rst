@@ -28,7 +28,7 @@ connected via USB or optical cable.
 
 .. ipython::
 
-  In [1]: from freefield import Processors, DIR;
+  In [1]: from freefield import Processors, DIR, freefield;
 
   In [2]: circuit = str(DIR/"data"/"rcx"/"play_buf.rcx")  # example circuit
 
@@ -52,9 +52,6 @@ The above circuits enable us to write signal to the processors, play them and ca
 a button box. Since this is the standard setting for our sound localization test, you can use the :meth:`initialize_default`
 method. The above example is synonymous to:
 
-.. ipython::
-
-  In [7]: my_proc.initialize_default(setup="dome", mode="loctest_freefield")
 
 All possible modes are listed in the methods documentation.
 
