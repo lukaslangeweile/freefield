@@ -12,6 +12,7 @@ from copy import deepcopy
 from dataclasses import dataclass
 from pathlib import Path
 
+from typing import Optional
 import numpy as np
 import pyloudnorm
 import slab
@@ -29,7 +30,7 @@ CAMERAS = None
 PROCESSORS = None
 SENSOR = None
 SPEAKERS = []  # list of all the loudspeakers in the active setup
-SETUP: Setup| None = None  # the currently active setup - "dome" or "arc"
+SETUP: Optional[Setup] = None   # the currently active setup - "dome" or "arc"
 
 def initialize(setup, default=None, device=None, zbus=True, connection="GB", camera=None, sensor_tracking=False,
                calibration_file=None):
