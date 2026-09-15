@@ -1,22 +1,67 @@
-import freefield
-import slab
 import time
 
-freefield.initialize(setup="dome", default="loctest_freefield", sensor_tracking=True)
+import freefield
+import slab
 
-speaker_indices = [1, 2, 3, 4, 5, 6, 7] #TODO: select indices for azimuthal speakers
-speakers = freefield.pick_speakers(speaker_indices)
+
+# Initialize the free-field setup.
+# Sensor tracking is used to record the perceived sound direction.
+freefield.initialize(
+    setup="dome",
+    default="loctest_freefield",
+    sensor_tracking=True,
+)
+
+# Select loudspeakers located in the horizontal plane.
+speaker_indices = [1, 2, 3, 4, 5, 6, 7]
+
+# Create a randomized trial sequence.
 n_reps = 4
-seq = slab.Trialsequence(speakers, n_reps, kind="non_repeating")
+sequence = slab.Trialsequence(
+    conditions=speaker_indices,
+    n_reps=n_reps,
+    kind="non_repeating",
+)
+
+# Use the same broadband stimulus for every trial.
+stimulus = slab.Sound.pinknoise(duration=0.5)
+
+# The buffer length is identical for every trial and only needs to be set once.
+freefield.write(
+    tag="playbuflen",
+    value=stimulus.n_samples,
+    processors=["RX81", "RX82"],
+)
 
 freefield.play_start_sound()
 
-for speaker in seq:
-    time.sleep(0.2)
-    sound = slab.Sound.pinknoise(duration=0.5)
-    freefield.write(tag="playbuflen", value=sound.n_samples, processors=["RX81", "RX82"])
-    freefield.set_signal_and_speaker(signal=sound.data.flatten(), speaker=speaker)
+for speaker_index in sequence:
+
+    # The participant presses the button when the head is returned to center position
+    freefield.wait_for_button(
+        proc="RP2",
+        tag="response",
+    )
+
+    speaker = freefield.pick_speakers(speaker_index)[0]
+
+    # Present the stimulus from the target loudspeaker.
+    freefield.set_signal_and_speaker(
+        signal=stimulus.data.flatten(),
+        speaker=speaker,
+    )
     freefield.play()
-    freefield.wait_for_button(proc="RP2", tag="response")
-    pose = freefield.get_head_pose(method="sensor", convention="psychoacoustics")
-    seq.add_response(pose)
+
+    # The participant turns their head towards the perceived sound location
+    # and presses the response button.
+    freefield.wait_for_button(
+        proc="RP2",
+        tag="response",
+    )
+
+    response = freefield.get_head_pose(
+        method="sensor",
+        convention="psychoacoustics",
+    )
+
+    sequence.add_response(response)
