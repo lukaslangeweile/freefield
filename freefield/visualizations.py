@@ -2,9 +2,77 @@ from mpl_toolkits.mplot3d import Axes3D
 import matplotlib.pyplot as plt
 import numpy as np
 import freefield
+from freefield.setups import SETUPS, Setup
 import slab
 
-def plot_speaker_table(setup):
+def plot_setup(setup):
+
+    # Check input
+
+    if isinstance(setup, str):
+        setup_name = setup.lower()
+
+        try:
+            setup = SETUPS[setup_name]
+        except KeyError:
+            raise ValueError(
+                f"Unknown setup {setup!r}. "
+                f"Available setups are: {', '.join(SETUPS)}"
+            )
+
+    elif isinstance(setup, Setup):
+        setup = setup
+
+
+    else:
+        raise TypeError(
+            f"Argument 'setup' must be a string or Setup object, "
+            f"got {type(setup).__name__} instead."
+        )
+
+    # Load speakertable
+    speakers = freefield.read_speaker_table(setup)
+
+    azi = np.array([speaker.azimuth for speaker in speakers])
+    ele = np.array([speaker.elevation for speaker in speakers])
+    dis = np.array([speaker.distance for speaker in speakers])
+    idx = np.array([speaker.index for speaker in speakers])
+
+
+    fig = plt.figure()
+    ax = fig.add_subplot(111, projection="3d")
+    fig.set_size_inches(15, 15)
+
+    azi = np.deg2rad(azi)
+    ele = np.deg2rad(ele - 90)
+
+    x = dis * np.sin(ele) * np.cos(azi)
+    y = dis * np.sin(ele) * np.sin(azi)
+    z = dis * np.cos(ele)
+
+    # Use the same scale for all axes
+    max_range = max(
+        np.ptp(x),
+        np.ptp(y),
+        np.ptp(z),
+    )
+
+    x_mid = (np.max(x) + np.min(x)) / 2
+    y_mid = (np.max(y) + np.min(y)) / 2
+    z_mid = (np.max(z) + np.min(z)) / 2
+
+    ax.set_xlim(x_mid - max_range / 2, x_mid + max_range / 2)
+    ax.set_ylim(y_mid - max_range / 2, y_mid + max_range / 2)
+    ax.set_zlim(z_mid - max_range / 2, z_mid + max_range / 2)
+
+    ax.set_box_aspect((1, 1, 1))
+
+    ax.scatter(x, y, z, c="b", marker=".")
+    ax.scatter(0, 0, 0, c="r", marker="o")
+    for i in range(len(speakers)):
+        ax.text(x[i], y[i], z[i] + 0.15, str(idx[i]))
+
+    return fig, ax
 
 def plot_sources(azimuth, elevation, distance=1.4):
     """Display sources in a 3D plot.
@@ -19,7 +87,7 @@ def plot_sources(azimuth, elevation, distance=1.4):
             or a single float if all sources have the same distance.
     """
     fig = plt.figure()
-    ax = fig.add_subplot(111, projection="3d")
+    ax = fig.add_subplot(222, projection="3d")
 
     azimuth = np.deg2rad(azimuth)
     elevation = np.deg2rad(elevation - 90)
@@ -47,6 +115,7 @@ def plot_sources(azimuth, elevation, distance=1.4):
 
     ax.scatter(x, y, z, c="b", marker=".")
     ax.scatter(0, 0, 0, c="r", marker="o")
+
 
     return fig, ax
 

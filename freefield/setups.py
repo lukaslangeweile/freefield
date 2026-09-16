@@ -1,6 +1,7 @@
 from __future__ import annotations
 from typing import Dict, Optional, Tuple
 from dataclasses import dataclass, field
+from freefield import DIR
 
 
 @dataclass(frozen=True)
@@ -105,8 +106,8 @@ FREEFIELD_STANDARD_MODES = {
 
 DOME = Setup(
     name="dome",
-    speaker_table="speakertable_dome.txt",
-    calibration_file="calibration_dome.pkl",
+    speaker_table=DIR / 'data' / 'tables' / 'speakertable_dome.txt',
+    calibration_file=DIR / 'data' / 'calibration_dome.pkl',
     playback_processors=("RX81", "RX82"),
     recording_processor="RP2",
     center_speaker=23,
@@ -117,8 +118,8 @@ DOME = Setup(
 
 ARC = Setup(
     name="arc",
-    speaker_table="speakertable_arc.txt",
-    calibration_file="calibration_arc.pkl",
+    speaker_table=DIR / 'data' / 'tables' / 'speakertable_arc.txt',
+    calibration_file=DIR / 'data' / 'calibration_arc.pkl',
     playback_processors=("RX81", "RX82"),
     recording_processor="RP2",
     center_speaker=23,
@@ -128,8 +129,8 @@ ARC = Setup(
 
 HEADPHONES = Setup(
     name="arc",
-    speaker_table="speakertable_arc.txt",
-    calibration_file="calibration_arc.pkl",
+    speaker_table=DIR / 'data' / 'tables' / 'speakertable_arc.txt',
+    calibration_file=DIR / 'data' / 'calibration_arc.pkl',
     playback_processors=("RX81", "RX82"),
     recording_processor="RP2",
     center_speaker=23,
@@ -140,8 +141,8 @@ HEADPHONES = Setup(
 
 DISTANCE_ARRAY = Setup(
     name="distance_array",
-    speaker_table="speakertable_distance_array.txt",
-    calibration_file="calibration_cathedral.pkl",
+    speaker_table=DIR / 'data' / 'tables' / 'speakertable_distance_array.txt',
+    calibration_file=DIR / 'data' / 'calibration_cathedral.pkl',
     playback_processors=("RX81",),
     recording_processor="RP2",
     center_speaker=23,

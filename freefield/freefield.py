@@ -132,15 +132,52 @@ class Speaker:
             calibrated = "calibrated"
         return f"<speaker {self.index} at azimuth {self.azimuth} and elevation {self.elevation}, {calibrated}>"
 
-def read_speaker_table():
+def read_speaker_table(setup=None):
     """
     Read table containing loudspeaker information from a file and initialize() a `Speaker` instance for each entry.
 
+    Arguments:
+        setup (str | Setup | None): Setup whose speaker table should be read.
+            Can be the name of a predefined setup or a Setup instance. If None,
+            the currently initialized setup is used.
+
     Returns:
-        (list): a list of instances of the `Speaker` class.
+        list: A list of Speaker instances.
+
+    Raises:
+        ValueError: If no setup is provided and freefield has not been initialized,
+            or if an unknown setup name is provided.
+        TypeError: If setup is neither a string, Setup instance, nor None.
     """
+    if setup is None:
+        setup = SETUP
+
+        if setup is None:
+            raise ValueError(
+                "No setup specified and freefield has not been initialized. "
+                f"Provide a setup or choose from: {', '.join(SETUPS)}"
+            )
+
+    elif isinstance(setup, str):
+        setup_name = setup.lower()
+
+        try:
+            setup = SETUPS[setup_name]
+        except KeyError:
+            raise ValueError(
+                f"Unknown setup {setup!r}. "
+                f"Available setups are: {', '.join(SETUPS)}"
+            )
+
+    elif not isinstance(setup, Setup):
+        raise TypeError(
+            f"Argument 'setup' must be a string, Setup object, or None, "
+            f"got {type(setup).__name__} instead."
+        )
+
+
     speakers = []
-    table_file = DIR / 'data' / 'tables' / SETUP.speaker_table
+    table_file = setup.speaker_table
     table = np.loadtxt(table_file, skiprows=1, delimiter=",", dtype=str)
     for row in table:
         speakers.append(Speaker(index=int(row[0]), analog_channel=int(row[1]), analog_proc=row[2],
@@ -160,7 +197,7 @@ def load_equalization(file=None, level=True, frequency=True):
             try to load the equalization from the default file.
     """
     if file is None:
-        file = DIR / 'data' / SETUP.calibration_file
+        file = SETUP.calibration_file
     else:
         file = Path(file)
     if file.exists():
