@@ -1,37 +1,33 @@
 Freefield: A Toolbox for Conducting Psychoacoustic Experiments
 ##############################################################
 
-Freefield is the software we are using to run psychoacoustical experiments (mostly concerning spatial hearing) at the
-university of Leipzig. The name is a term from the field of acoustics and describes a situation where no sound reflections occur.
-While the code is tailored to our experimental setup, it can be dynamically adapted to a more broader use.
+Freefield is an intuitive tool to design and conduct psychoacoustic experiments with Tucker-Davis Technologies (TDT) Hardware in Python.
 
-The Setup
----------
-Our main setup consists of an arc and a dome shaped array of 48 loudspeakers in a anechoic chamber. The loudspeakers are driven
-by two RX8 real time processors from Tucker Davis Technologies (TDT).
-
-Over the course, many lab members felt the need to conduct experiments outside of this main lab due to various reasons, which led
-us to adjust the libraries internal logic to allow for the implementation of self-designed, custom setups.
+Initially tailored specifically to only be applied in the anechoic experiment chamber at the University of Leipzig (the freefield laboratory),
+it has been further developed to be more dynamically applicable. Now it allows you to easliy create your own unique experiment setups and let freefield handle essential operations like
+writing to and reading from buffers, recording signals or loudspoeaker equalization for you.
 
 
 .. _Installation:
 
 Installation
-------------
+============
 
 The installation consists of two parts - the Python dependencies and the drivers for the hardware in the experimental setup.
 The latter is only relevant if you actually use the devices and is not required if you merely want to play around with the code.
 
 Python dependencies
-...................
-
-You will need Python version 3.8 since this is required by tensorflow which is necessary for head pose estimation. If you are new to Python, take a look at the installation guide for the Anaconda distribution.
+-------------------
+We recommend using Anaconda for the installation. If you are new to Python, take a look at the `install guide <https://www.anaconda.com/docs/getting-started/installation>`_ for Anaconda.
 
 Once you installed Anaconda, create a new environment with the correct Python version (name it "freefield" for example):
 
 .. code-block:: bash
 
-    conda create --name freefield python=3.12
+    conda create --name freefield python=3.8
+
+.. Note::
+    To use all the functionalities of freefield, Python 3.8 is required. However, if you do not plan to use head pose estimation you also can use more recent versions.
 
 Activate the environment and install pip, which is necessary to install other Python packages:
 
@@ -46,7 +42,7 @@ Now install the remaining python packages:
 
     pip install opencv-contrib-python numpy setuptools pandas matplotlib pillow h5py h5netcdf scipy slab metawear
 
-Finally, you have to obtain the freefield package as from github:
+Finally, you have to obtain the freefield package from github:
 
 .. code-block:: bash
 
@@ -54,12 +50,15 @@ Finally, you have to obtain the freefield package as from github:
 
 
 If you are only interested in playing around with the code, this is already sufficient and you can head
-to the getting started section. However, if you want to use the experimental setup (only possible on a Windows machine)
-there is more work to be done.
+to the Getting started section. However, if you want to use the experimental setup (only possible on a Windows machine),
+continue with the hardware drivers section.
 
 Hardware drivers
-................
+----------------
 
+.. Note::
+    Unfortunately, communication with TDT devices relies on the pywin32 package, which is only available for Windows.
+    You can still use freefield on Mac OS or Linux to your experiment code, but connection to the actual processors will be simulated via a dummy.
 
 To use the functionalities of the processors you have to download and install the drivers from the
 `TDT Hompage <https://www.tdt.com/support/downloads/>`_   (install TDT Drivers/RPvdsEx as well as ActiveX Controls).
