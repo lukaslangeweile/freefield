@@ -1,14 +1,32 @@
+import math
+
 from mpl_toolkits.mplot3d import Axes3D
 import matplotlib.pyplot as plt
 import numpy as np
 import freefield
 from freefield.setups import SETUPS, Setup
+from math import sqrt
 import slab
 
-def plot_setup(setup):
+def plot_setup(setup, close_threshold=0.20, label_offset=0.07):
+    """
+    Plot all loudspeakers of a setup in 3D.
+
+    Speaker indices are displayed next to their positions. If speakers are
+    spatially close to each other, the vertical text offset alternates to
+    reduce overlap.
+
+    Arguments:
+        setup (str | Setup): Setup whose loudspeakers should be plotted.
+        close_threshold (float): Distance in meters below which two speakers
+            are considered close.
+        label_offset (float): Vertical offset of speaker index labels in meters.
+
+    Returns:
+        tuple: Matplotlib figure and axes objects.
+    """
 
     # Check input
-
     if isinstance(setup, str):
         setup_name = setup.lower()
 
@@ -30,7 +48,7 @@ def plot_setup(setup):
             f"got {type(setup).__name__} instead."
         )
 
-    # Load speakertable
+    # Load speaker table
     speakers = freefield.read_speaker_table(setup)
 
     azi = np.array([speaker.azimuth for speaker in speakers])
@@ -38,17 +56,18 @@ def plot_setup(setup):
     dis = np.array([speaker.distance for speaker in speakers])
     idx = np.array([speaker.index for speaker in speakers])
 
-
-    fig = plt.figure()
-    ax = fig.add_subplot(111, projection="3d")
-    fig.set_size_inches(15, 15)
-
+    # Convert spherical coordinates to Cartesian coordinates
     azi = np.deg2rad(azi)
     ele = np.deg2rad(ele - 90)
 
     x = dis * np.sin(ele) * np.cos(azi)
     y = dis * np.sin(ele) * np.sin(azi)
     z = dis * np.cos(ele)
+
+    # Create figure
+    fig = plt.figure()
+    ax = fig.add_subplot(111, projection="3d")
+    fig.set_size_inches(15, 15)
 
     # Use the same scale for all axes
     max_range = max(
@@ -67,10 +86,41 @@ def plot_setup(setup):
 
     ax.set_box_aspect((1, 1, 1))
 
+    # Plot speakers and listener
     ax.scatter(x, y, z, c="b", marker=".")
     ax.scatter(0, 0, 0, c="r", marker="o")
+
+    # Keep track of the offset used for every label
+    label_offsets = np.full(len(speakers), label_offset, dtype=float)
+
     for i in range(len(speakers)):
-        ax.text(x[i], y[i], z[i] + 0.15, str(idx[i]))
+        offset_correction = 0
+        if i > 0:
+            # Distances to all speakers whose labels have already been placed
+            distances = np.sqrt(
+                (x[i] - x[:i]) ** 2
+                + (y[i] - y[:i]) ** 2
+                + (z[i] - z[:i]) ** 2
+            )
+
+            close_speakers = np.where(distances <= close_threshold)[0]
+
+            if len(close_speakers) > 0:
+                # Find the closest already labelled speaker
+                closest = close_speakers[np.argmin(distances[close_speakers])]
+
+                # Put this label on the opposite side
+                label_offsets[i] = -label_offsets[closest]
+
+            if label_offsets[i] < 0:
+                offset_correction = -0.07
+
+        ax.text(
+            x[i],
+            y[i],
+            z[i] + label_offsets[i] + offset_correction,
+            str(idx[i]),
+        )
 
     return fig, ax
 
