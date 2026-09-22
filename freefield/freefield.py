@@ -1200,3 +1200,4 @@ def set_logger(level, report=True):
     except AttributeError:
         raise AttributeError("Choose from 'DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'")
 
+

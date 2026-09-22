@@ -16,7 +16,5 @@ writing to and reading from buffers, recording signals or loudspoeaker equalizat
 
    getting_started
    setups
-   initialize
-   hardware
    worked_examples
    reference

@@ -81,7 +81,7 @@ To use these default modes, initialize your setup as such:
 
 Customize your own Setup
 ------------------------
-In case you don't work with one of the setups mentioned above and want to implement oyur own experiment environment,
+In case you don't work with one of the setups mentioned above and want to implement your own experiment environment,
 you have the possiblity to do so by creating your own :class:`Setup` object:
 
 ::
@@ -110,6 +110,10 @@ you have the possiblity to do so by creating your own :class:`Setup` object:
             ['RX82', 'RX8', 'path/to/processor_configuration.rcx']
         ]
     )
+.. Note::
+    For a custom setup, providing a speaker table is necessary. See `Speaker Table`_ on how to create one). You don't have to
+    provide a calibration file, however a lot of psychoacoustic paradigms will require your setup to be calibrated. See `Loudspeaker Equalization`
+    on how to create a calibration.
 
 Speaker Table
 ^^^^^^^^^^^^^
