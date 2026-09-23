@@ -62,7 +62,7 @@ def eg(data, speaker_positions=None):
     eles = data[:,3]
     if speaker_positions is None:
         return np.percentile(eles, 75) - np.percentile(eles, 25)
-    speaker_seq = data[:,1].astype(int) # presented sequence of speaker numbers
+    speaker_seq = data[:,1].astype(int) # presented sequence of speaker numbers_0-99_tts
     elevation_seq = speaker_positions[speaker_seq,1] # get the elevations for the speakers in the presented sequence
     regression = stats.linregress(elevation_seq, eles)
     return regression.slope

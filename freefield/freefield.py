@@ -19,8 +19,10 @@ import slab
 from matplotlib import pyplot as plt
 from matplotlib.axes import Axes
 
+import freefield
 from freefield import DIR
 from freefield.setups import Setup, SETUPS
+from freefield.visualizations import plot_setup
 
 logging.basicConfig(level=logging.INFO)
 slab.Signal.set_default_samplerate(48828)  # default samplerate for generating sounds, filters etc.
@@ -39,7 +41,7 @@ def initialize(setup, default=None, device=None, zbus=True, connection="GB", cam
     the setup runs until `halt()` is called. Initialzing device which are already running will flush them.
 
     Arguments:
-        setup (str| setups.Setup()): which setup to load, can be 'dome', 'arc', 'distance_array' or 'headphones', also sccepts custom setups
+        setup (str| setups.Setup()): which setup to load, can be 'dome', 'arc', 'distance_array' or 'headphones', also qccepts custom setups
         default (str | None): initialize() the setup using one of the default settings which are:
             'play_rec': play sounds using two RX8s (or one RX8 in case of the distance_array setup) and record them with a RP2
             'play_birec': same as 'play_rec' but record from two microphone channels
@@ -422,7 +424,7 @@ def set_signal_headphones(signal, speaker, equalize=True, data_tags=['data_l', '
             signal (array-like): signal to load to the buffer, must be one-dimensional
             equalize (bool): if True (=default) apply loudspeaker equalization
             data_tags (List): A list containing the names of the tags feeding into the signal buffers
-            chan_tags (List): A list containing the names of the tags setting the output channel numbers
+            chan_tags (List): A list containing the names of the tags setting the output channel numbers_0-99_tts
             play_tag ('string'): Name of the tag connected to the playback switch
     """
     speakers = SPEAKERS
@@ -1065,7 +1067,7 @@ def localization_test_freefield(speakers, duration=0.5, n_reps=1, n_images=5, vi
     0 elevation and azimuth and press the button to indicate the next trial.
 
     Args:
-        speakers : rows from the speaker table or index numbers of the speakers.
+        speakers : rows from the speaker table or index numbers_0-99_tts of the speakers.
         duration (float): duration of the noise played from the target positions in seconds
         n_reps(int): number of repetitions for each target
         n_images(int): number of images taken for each head pose estimate
@@ -1112,7 +1114,7 @@ def localization_test_headphones(speakers, signals, n_reps=1, n_images=5, visual
     The procedure is the same as in localization_test_freefield().
 
     Args:
-        speakers : rows from the speaker table or index numbers of the speakers.
+        speakers : rows from the speaker table or index numbers_0-99_tts of the speakers.
         signals (array-like) : binaural sounds that are played. Must be ordered corresponding to the targets (first
             element of signals is played for the first row of targets etc.). If the elements of signals are
             instances of slab.Precomputed, a random one is drawn in each trial (useful if you don't want to repeat
@@ -1200,4 +1202,117 @@ def set_logger(level, report=True):
     except AttributeError:
         raise AttributeError("Choose from 'DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'")
 
+
+
+def check_setup(setup=SETUP):
+    """
+    Perform a manual hardware check of a loudspeaker setup.
+
+    Each loudspeaker plays a recording of its own index. After playback,
+    the user can choose to continue, replay the current speaker, return
+    to the previous speaker, or abort the check.
+
+    Parameters
+    ----------
+    setup : str | Setup | None
+        Setup to check. Can be the name of a predefined setup or a custom
+        Setup object. If None, the currently initialized setup is used.
+
+    Controls
+    --------
+    1 : next speaker
+    2 : replay current speaker
+    3 : previous speaker
+    4 : abort check
+    """
+
+    # Resolve the requested setup
+    if setup is None:
+        if SETUP is None:
+            raise RuntimeError(
+                "No setup is currently initialized. "
+                "Pass a setup name or Setup object to check_setup()."
+            )
+        target_setup = SETUP
+
+    elif isinstance(setup, str):
+        setup_name = setup.lower()
+
+        try:
+            target_setup = SETUPS[setup_name]
+        except KeyError:
+            raise ValueError(
+                f"Unknown setup {setup!r}. "
+                f"Available setups are: {', '.join(SETUPS)}"
+            )
+
+    elif isinstance(setup, Setup):
+        target_setup = setup
+
+    else:
+        raise TypeError(
+            "Argument 'setup' must be a string, Setup object, or None, "
+            f"got {type(setup).__name__} instead."
+        )
+
+    # make sure the correct setup and processor mode are initialized
+    required_mode = "loctest_freefield"
+
+    setup_changed = SETUP != target_setup
+    processors_missing = PROCESSORS is None
+
+    if setup_changed or processors_missing:
+        initialize(
+            setup=target_setup,
+            default=required_mode,
+        )
+
+    elif PROCESSORS.mode != required_mode:
+        PROCESSORS.initialize_default(mode=required_mode)
+
+    # Load speakers
+    speakers = read_speaker_table(target_setup)
+
+    if not speakers:
+        raise RuntimeError(
+            f"No speakers found for setup {target_setup.name!r}."
+        )
+
+    numbers_path = DIR / "data" / "sounds" / "numbers_0-99_tts"
+
+    #Plot setup
+
+    plot, axes = plot_setup(setup) # TODO: animate it, so that current speaker lights up in different color
+
+    # Set up the navigation stacks
+    st_active = list(reversed(speakers))
+    st_done = []
+
+
+    # work through the stack
+    while st_active:
+
+        speaker = st_active.pop()
+
+        # read in sound file
+        filepath = numbers_path / f"{speaker.index}.wav"
+        sound = slab.Sound(filepath)  # TODO:check samplerate
+
+        # write data
+        set_signal_and_speaker(signal=sound, speaker=speaker)
+
+        # play
+        play()
+
+        wait_for_button(proc="RP2", tag="response")  # TODO: decision tree - 1=next, 2=replay, 3=back
+        response = read(tag="response", processor="RP2")
+
+        if response == 1:
+            st_done.append(speaker)
+        elif response == 2:
+            st_active.append(speaker)
+        elif response == 3:
+            last_pop = st_done.pop()
+            st_active.append(speaker)
+            st_active.append(last_pop)
 
