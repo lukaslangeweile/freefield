@@ -1,7 +1,9 @@
 import math
-
+import matplotlib
+matplotlib.use("TkAgg")
 from mpl_toolkits.mplot3d import Axes3D
 import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d.art3d import Path3DCollection
 import numpy as np
 import freefield
 from freefield.setups import SETUPS, Setup
@@ -87,7 +89,7 @@ def plot_setup(setup, close_threshold=0.20, label_offset=0.07):
     ax.set_box_aspect((1, 1, 1))
 
     # Plot speakers and listener
-    ax.scatter(x, y, z, c="b", marker=".")
+    scatter = ax.scatter(x, y, z, c="b", marker=".")
     ax.scatter(0, 0, 0, c="r", marker="o")
 
     # Keep track of the offset used for every label
@@ -122,7 +124,56 @@ def plot_setup(setup, close_threshold=0.20, label_offset=0.07):
             str(idx[i]),
         )
 
-    return fig, ax
+    return fig, ax, scatter
+
+def update_setup_plot(fig, scatter, speakers, active=None, done=None):
+    """
+    Update speaker colors in a setup plot.
+
+    Parameters
+    ----------
+    fig : matplotlib.figure.Figure
+        Figure containing the setup plot.
+
+    scatter : matplotlib.collections.PathCollection
+        Scatter object containing the speaker markers.
+
+    speakers : list[Speaker]
+        Speakers shown in the scatter plot. Their order must correspond
+        to the order of points in `scatter`.
+
+    active : Speaker | None
+        Speaker currently being checked.
+
+    done : list[Speaker] | None
+        Speakers that have already been confirmed.
+    """
+
+    if done is None:
+        done = []
+    done_indices = {speaker.index for speaker in done}
+    active_index = active.index if active is not None else None
+
+    colors = []
+
+
+    for speaker in speakers:
+        if speaker.index == active_index:
+            # currently tested speaker
+            colors.append("tab:orange")
+        elif speaker.index in done_indices:
+            # successfully checked speaker
+            colors.append("tab:green")
+        else:
+            # not tested yet
+            colors.append("lightgray")
+
+    scatter.set_color(colors)
+
+    # redraw plot
+    fig.canvas.draw_idle()
+    fig.canvas.flush_events()
+
 
 def plot_sources(azimuth, elevation, distance=1.4):
     """Display sources in a 3D plot.
@@ -163,11 +214,10 @@ def plot_sources(azimuth, elevation, distance=1.4):
 
     ax.set_box_aspect((1, 1, 1))
 
-    ax.scatter(x, y, z, c="b", marker=".")
+    scatter = ax.scatter(x, y, z, c="b", marker=".")
     ax.scatter(0, 0, 0, c="r", marker="o")
 
-
-    return fig, ax
+    return fig, ax, scatter
 
 
 if __name__ == '__main__':

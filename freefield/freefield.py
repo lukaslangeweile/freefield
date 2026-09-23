@@ -22,7 +22,7 @@ from matplotlib.axes import Axes
 import freefield
 from freefield import DIR
 from freefield.setups import Setup, SETUPS
-from freefield.visualizations import plot_setup
+from freefield.visualizations import plot_setup, update_setup_plot
 
 logging.basicConfig(level=logging.INFO)
 slab.Signal.set_default_samplerate(48828)  # default samplerate for generating sounds, filters etc.
@@ -1204,7 +1204,7 @@ def set_logger(level, report=True):
 
 
 
-def check_setup(setup=SETUP):
+def check_setup(setup=None, button_control="keyboard"):
     """
     Perform a manual hardware check of a loudspeaker setup.
 
@@ -1217,6 +1217,8 @@ def check_setup(setup=SETUP):
     setup : str | Setup | None
         Setup to check. Can be the name of a predefined setup or a custom
         Setup object. If None, the currently initialized setup is used.
+    button_control: "keyboard" | "processor"
+        Type of button control to navigate through the speaker table. 
 
     Controls
     --------
@@ -1282,7 +1284,7 @@ def check_setup(setup=SETUP):
 
     #Plot setup
 
-    plot, axes = plot_setup(setup) # TODO: animate it, so that current speaker lights up in different color
+    fig, ax, scatter = plot_setup(setup) # TODO: animate it, so that current speaker lights up in different color
 
     # Set up the navigation stacks
     st_active = list(reversed(speakers))
@@ -1294,25 +1296,93 @@ def check_setup(setup=SETUP):
 
         speaker = st_active.pop()
 
+        # Highlight current speaker
+        update_setup_plot(
+            fig=fig,
+            scatter=scatter,
+            speakers=speakers,
+            active=speaker,
+            done=st_done,
+        )
+
         # read in sound file
         filepath = numbers_path / f"{speaker.index}.wav"
         sound = slab.Sound(filepath)  # TODO:check samplerate
 
         # write data
-        set_signal_and_speaker(signal=sound, speaker=speaker)
+        set_signal_and_speaker(signal=sound, speaker=speaker, equalize=False)
 
         # play
         play()
 
-        wait_for_button(proc="RP2", tag="response")  # TODO: decision tree - 1=next, 2=replay, 3=back
-        response = read(tag="response", processor="RP2")
+        if button_control == "processor":
+            response = 0
 
-        if response == 1:
+            while response == 0:
+                response = read(
+                    tag="response",
+                    processor="RP2",
+                )
+
+                # Keep matplotlib interactive while waiting
+                plt.pause(0.01)
+
+        elif button_control == "keyboard":
+            keyboard_response = {"value": None}
+
+            def on_key_press(event):
+                if event.key in ("1", "2", "3"):
+                    keyboard_response["value"] = event.key
+
+            # Listen for keyboard input in the matplotlib window
+            connection_id = fig.canvas.mpl_connect(
+                "key_press_event",
+                on_key_press,
+            )
+
+            # Wait for valid input while keeping the GUI responsive
+            while keyboard_response["value"] is None:
+                plt.pause(0.01)
+
+            # Stop listening once a response was given
+            fig.canvas.mpl_disconnect(connection_id)
+
+            response = keyboard_response["value"]
+
+        else:
+            raise ValueError(
+                f"Unknown button_control {button_control!r}. "
+                "Expected 'processor' or 'keyboard'."
+            )
+
+
+        if response == "1":
+            # confirm speaker
             st_done.append(speaker)
-        elif response == 2:
+        elif response == "2":
+            # repeat speaker
             st_active.append(speaker)
-        elif response == 3:
-            last_pop = st_done.pop()
+        elif response == "3":
+            # go back
+            if st_done:
+                previous_speaker = st_done.pop()
+                st_active.append(speaker)
+                st_active.append(previous_speaker)
+            else:
+                # if no previous speaker: replay this speaker
+                st_active.append(speaker)
+        elif response == "4":
+            # leave the check
+            break
+        else:
+            # accidental button press -> repeat speaker
             st_active.append(speaker)
-            st_active.append(last_pop)
 
+        # Remove active highlight when finished
+        update_setup_plot(
+            fig=fig,
+            scatter=scatter,
+            speakers=speakers,
+            active=None,
+            done=st_done,
+        )
