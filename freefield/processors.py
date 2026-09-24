@@ -1,7 +1,6 @@
 from pathlib import Path
 import numpy as np
 from freefield import DIR
-import freefield
 import os.path
 import random
 import logging

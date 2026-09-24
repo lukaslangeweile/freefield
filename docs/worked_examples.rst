@@ -22,12 +22,15 @@ Runs a Localisation Test for speakers across the azimuth of the dome setup. ::
     )
 
     # Select loudspeakers located in the horizontal plane.
-    speaker_indices = [1, 2, 3, 4, 5, 6, 7]
+    speakers = [
+        speaker for speaker in speakers
+        if speaker.elevation == 0
+    ]
 
     # Create a randomized trial sequence.
     n_reps = 4
     sequence = slab.Trialsequence(
-        conditions=speaker_indices,
+        conditions=speakers,
         n_reps=n_reps,
         kind="non_repeating",
     )
@@ -44,7 +47,7 @@ Runs a Localisation Test for speakers across the azimuth of the dome setup. ::
 
     freefield.play_start_sound()
 
-    for speaker_index in sequence:
+    for speaker in sequence:
 
         # The participant presses the button when the head is returned to center position
         freefield.wait_for_button(
@@ -52,7 +55,6 @@ Runs a Localisation Test for speakers across the azimuth of the dome setup. ::
             tag="response",
         )
 
-        speaker = freefield.pick_speakers(speaker_index)[0]
 
         # Present the stimulus from the target loudspeaker.
         freefield.set_signal_and_speaker(
@@ -75,9 +77,12 @@ Runs a Localisation Test for speakers across the azimuth of the dome setup. ::
 
         sequence.add_response(response)
 
-Minimum Audible Angle (MMA) Experiment
+    # Halt the running setup after the experiment is finished
+    freefield.halt()
+
+Minimum Audible Angle (MAA) Experiment
 --------------------------------------
-Determines the Minimum Audible Angle, i.e. the just noticable difference in sound presentation angle, for the azimuth with
+Determines the Minimum Audible Angle, i.e. the just noticeable difference in sound presentation angle, in azimuth with
 the arc setup::
 
     import random
@@ -167,6 +172,7 @@ the arc setup::
             )
 
             freefield.play()
+            freefield.wait_to_finish_playing()
 
             time.sleep(isi)
 
@@ -187,6 +193,9 @@ the arc setup::
         correct = response == correct_response
 
         staircase.add_response(correct)
+
+    # Halt the running setup after the experiment is finished
+    freefield.halt()
 
     print(
         f"Estimated MAA: {staircase.threshold():.2f} degrees"

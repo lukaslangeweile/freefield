@@ -2,7 +2,7 @@
 # Visit https://bit.ly/cffinit to generate yours today!
 
 cff-version: 1.2.0
-title: freefield - experimental control for psychoacoustics
+title: freefield
 message: >-
   If you use this software, please cite it using the
   metadata from this file.
@@ -12,6 +12,13 @@ authors:
     given-names: Ole
     family-names: Bialas
     email: ole.bialas@posteo.de
+  - given-names: Paul
+    family-names: Friedrich
+    orcid: 'https://orcid.org/0009-0000-6923-4284'
+    email: paul.friedrich@uni-leipzig.de
+  - given-names: Lukas
+    family-names: Lange
+    email: lukas.lange01@gmail.com
+url: 'https://github.com/OleBialas/freefield.git'
+date-released: '2022-02-09'
 doi: 10.5281/zenodo.6027388
-url: "https://github.com/OleBialas/freefield.git"
-date-released: 2022-02-09

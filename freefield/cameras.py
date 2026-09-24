@@ -4,7 +4,10 @@ from abc import abstractmethod
 import numpy
 from matplotlib import pyplot as plt
 from scipy import stats
-import PIL
+try:
+    import PIL
+except ModuleNotFoundError:
+    PIL = False
 try:
     import cv2
 except ModuleNotFoundError:

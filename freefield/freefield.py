@@ -1,25 +1,17 @@
 import copy
-import time
-from pathlib import Path
-import os
 import datetime
 import logging
 import os
 import pickle
-import random
 import time
 from copy import deepcopy
 from dataclasses import dataclass
 from pathlib import Path
-
 from typing import Optional
 import numpy as np
-import pyloudnorm
 import slab
 from matplotlib import pyplot as plt
 from matplotlib.axes import Axes
-
-import freefield
 from freefield import DIR
 from freefield.setups import Setup, SETUPS
 from freefield.visualizations import plot_setup, update_setup_plot
@@ -40,7 +32,7 @@ def initialize(setup, default=None, device=None, zbus=True, connection="GB", cam
     Initialize the device and load table (and calibration) for the selected setup. Once initialized,
     the setup runs until `halt()` is called. Initialzing device which are already running will flush them.
 
-    Arguments:
+    Parameters:
         setup (str| setups.Setup()): which setup to load, can be 'dome', 'arc', 'distance_array' or 'headphones', also qccepts custom setups
         default (str | None): initialize() the setup using one of the default settings which are:
             'play_rec': play sounds using two RX8s (or one RX8 in case of the distance_array setup) and record them with a RP2
@@ -221,7 +213,7 @@ def write(tag, value, processors):
     Write data to processor(s) by setting a `tag` on one or multiple device to a given value.
     The same tag can be set to the same value on multiple device by passing a list of names.
 
-    Arguments:
+    Parameters:
         tag (str): Name of the tag in the .rcx file where the `value` is written to.
         value (int | float | array) : Value that is written to the tag. If an array, it must be one dimensional.
             The data type of the value must match the tag in the .rcx file, otherwise this function will fail without
@@ -229,12 +221,15 @@ def write(tag, value, processors):
         processors (str | list) : string (or list of strings) with the name(s) of the processor(s) to write to.
 
     Examples:
-        import freefield
-        freefield.initialize()(setup="dome", default="play_rec")
-        write('data', 1000, ['RX81', 'RX82']) # set the value of tag 'playbuflen' on RX81 & RX82 to 1000
-        import numpy
-        data = numpy.random.randn(1000)
-        write('data', data, "RX81") # write data array to the tag 'data' on the RX81
+        >>> import freefield
+        >>> import numpy
+        >>> # initialize freefield
+        >>> freefield.initialize(setup="dome", default="play_rec")
+        >>> # set the value of tag 'playbuflen' on RX81 & RX82 to 1000
+        >>> freefield.write('playbudflen', 1000, ['RX81', 'RX82'])
+        >>> # create data array and write it to the tag 'data' on the RX81
+        >>> data = numpy.random.randn(1000)
+        >>> write('data', data, "RX81")
     """
     if PROCESSORS is None:
         raise RuntimeError("PROCESSORS is not initialized. Call freefield.initialize() first.")
@@ -283,6 +278,8 @@ def halt():
         CAMERAS.halt()
     if SENSOR is not None:
         SENSOR.halt()
+    if SETUP is not None:
+        SETUP = None
 
 
 def wait_to_finish_playing(proc="all", tag="playback"):
@@ -313,7 +310,7 @@ def wait_to_finish_playing(proc="all", tag="playback"):
 def wait_for_button(proc="RP2", tag="response"):
     """
     Busy wait until the response button was pressed. Repeatedly read a tag from a processor and do a busy wait while
-        0 is returned.
+    0 is returned.
 
     Args:
         proc (str): Processor from which the tag is read.
@@ -369,7 +366,7 @@ def shift_setup(delta_azi, delta_ele, delta_dist):
     is equivalent to shifting the setup to the left. Changes are not saved to
     the speaker table.
 
-    Args:
+    Parameters:
         delta_azi (float): azimuth by which the setup is shifted, positive value means shifting right
         delta_ele (float): elevation by which the setup is shifted, positive value means shifting up
         delta_dist (float): distance by which the setup is shifted, positive value means shifting away
@@ -388,13 +385,13 @@ def set_signal_and_speaker(signal, speaker, equalize=True, data_tag='data', chan
     Load a signal into the processor buffer and set the output channel to match the speaker.
     The processor is chosen automatically depending on the speaker.
 
-        Args:
-            signal (array-like): signal to load to the buffer, must be one-dimensional
-            speaker (Speaker, int) : speaker to play the signal from, can be index number or [azimuth, elevation]
-            equalize (bool): if True (=default) apply loudspeaker equalization
-            data_tag ('string'): Name of the tag feeding into the signal buffer
-            chan_tag ('string'): Name of the tag setting the output channel number
-            play_tag ('string'): Name of the tag connected to the playback switch
+    Parameters:
+        signal (array-like): signal to load to the buffer, must be one-dimensional
+        speaker (Speaker | int) : speaker to play the signal from, can be index number or [azimuth, elevation]
+        equalize (bool): if True (=default) apply loudspeaker equalization
+        data_tag (str): Name of the tag feeding into the signal buffer
+        chan_tag (str): Name of the tag setting the output channel number
+        play_tag (str): Name of the tag connected to the playback switch
     """
     if PROCESSORS is None:
         raise RuntimeError("PROCESSORS is not initialized. Call freefield.initialize()() first.")
@@ -405,7 +402,7 @@ def set_signal_and_speaker(signal, speaker, equalize=True, data_tag='data', chan
         to_play = apply_equalization(signal, speaker)
     else:
         to_play = signal
-    PROCESSORS.write(tag=n_samples_tag, value=to_play.n_samples, processors=['RX81', 'RX82'])
+    PROCESSORS.write(tag=n_samples_tag, value=to_play.n_samples, processors=SETUP.playback_processors)
     PROCESSORS.write(tag=chan_tag, value=speaker.analog_channel, processors=speaker.analog_proc)
     PROCESSORS.write(tag=data_tag, value=to_play.data, processors=speaker.analog_proc)
     other_procs = set([s.analog_proc for s in SPEAKERS])
@@ -418,14 +415,14 @@ def set_signal_headphones(signal, speaker, equalize=True, data_tags=['data_l', '
     """
     Load a signal into the processor buffer and set the output channels to headphones.
 
-        Args:
-            speaker (string): A string specifying the headphone speakers to play from.
-                Can be 'left', 'right', or 'both'.
-            signal (array-like): signal to load to the buffer, must be one-dimensional
-            equalize (bool): if True (=default) apply loudspeaker equalization
-            data_tags (List): A list containing the names of the tags feeding into the signal buffers
-            chan_tags (List): A list containing the names of the tags setting the output channel numbers_0-99_tts
-            play_tag ('string'): Name of the tag connected to the playback switch
+    Parameters:
+        speaker (str): A string specifying the headphone speakers to play from.
+            Can be 'left', 'right', or 'both'.
+        signal (array-like): signal to load to the buffer, must be one-dimensional
+        equalize (bool): if True (=default) apply loudspeaker equalization
+        data_tags (List): A list containing the names of the tags feeding into the signal buffers
+        chan_tags (List): A list containing the names of the tags setting the output channel numbers
+        play_tag (str): Name of the tag connected to the playback switch
     """
     speakers = SPEAKERS
     if speaker == 'both':
@@ -450,10 +447,8 @@ def set_signal_headphones(signal, speaker, equalize=True, data_tags=['data_l', '
 def set_speaker(speaker):
     """
     Set the analog channel on the processor corresponding to the selected speaker
-    Args:
-        speaker: the speaker to be selected
-    Returns:
-        None
+    Parameters:
+        speaker (Speaker | int): the speaker to be selected
     """
     if PROCESSORS is None:
         raise RuntimeError("PROCESSORS is not initialized. Call freefield.initialize()() first.")
@@ -489,13 +484,15 @@ def play_and_record(speaker, sound, compensate_delay=True, compensate_attenuatio
     rec still have the same length. For this to work, the circuits rec_buf.rcx
     and play_buf.rcx have to be initialized on RP2 and RX8s and the mic must
     be plugged in.
+
     Parameters:
-        speaker: integer between 1 and 48, index number of the speaker
+        speaker (Speaker | int): Speaker or speaker index which should be played from
         sound: instance of slab.Sound, signal that is played from the speaker
-        compensate_delay: bool, compensate the delay between play and record
-        compensate_attenuation:
-        equalize:
-        recording_samplerate: samplerate of the recording
+        compensate_delay (bool): compensate the delay between play and record if True
+        compensate_attenuation (bool):
+        equalize (bool):
+        recording_samplerate (int): samplerate of the recording
+
     Returns:
         rec: 1-D array, recorded signal
     """
@@ -661,7 +658,7 @@ def equalize_headphones(bandwidth=1/10, threshold=.3, low_cutoff=100, high_cutof
        difference by inverse filtering. For more details on how the
        inverse filters are computed see the documentation of slab.Filter.equalizing_filterbank
 
-       Args:
+       Parameters:
            bandwidth (float): Width of the filters, used to divide the signal into subbands, in octaves. A small
                bandwidth results in a fine tuned transfer function which is useful for equalizing small notches.
            threshold (float): Threshold for level equalization. Correct level only for speakers that deviate more
@@ -670,8 +667,14 @@ def equalize_headphones(bandwidth=1/10, threshold=.3, low_cutoff=100, high_cutof
            high_cutoff (int | float): The upper limit of frequency equalization range in Hz.
            alpha (float): Filter regularization parameter. Values below 1.0 reduce the filter's effect, values above
                amplify it. WARNING: large filter gains may result in temporal distortions of the sound
-           file_name (string): Name of the file to store equalization parameters.
+           file_name (str): Name of the file to store equalization parameters.
 
+        Returns:
+            dict[str], dict[str, float | np.ndarray]]:
+                Equalization parameters for each speaker. The outer dictionary is keyed
+                by the speaker index as a string. Each speaker entry contains:
+                    - ``"level"``: equalization level for the speaker.
+                    - ``"filter"``: equalization filter coefficients for the speaker.
        """
     if not PROCESSORS:
         raise RuntimeError("PROCESSORS is not initialized. Call freefield.initialize()() first.")
@@ -936,7 +939,8 @@ def get_head_response(method='sensor', proc="RP2", tag="response"):
     """
     Get participants localization response by pointing their head towards the perceived
      sound source and pressing a button.
-    Args:
+
+    Parameters:
         method (string): Method use for headpose estimation. Can be "camera" or "sensor".
         proc (string): Precssor that reads out the button response
         tag (string): Name of the Tag in the RPvdsEX file connected to the button input
@@ -961,10 +965,12 @@ def calibrate_sensor(led_feedback=True, button_control='processor'):
     Calibrate the motion sensor offset to 0° Azimuth and 0° Elevation. A LED will light up to guide head orientation
     towards the center speaker. After a button is pressed, head orientation will be measured until it remains stable.
     The average is then used as an offset for pose estimation.
-        Args:
-        led_feedback: whether to turn on the central led to assist gaze control during calibration
+
+    Parameters:
+        led_feedback (bool): whether to turn on the central led to assist gaze control during calibration
         button_control (str): whether to initialize() calibration by button response; may be 'processor' if a button is
-         connected to the RP2 or 'keyboard', if usb keyboard input is to be used.
+        connected to the RP2 or 'keyboard', if usb keyboard input is to be used.
+
     Returns:
         bool: True if difference between pose and fix is smaller than var, False otherwise
     """
@@ -1006,7 +1012,7 @@ def calibrate_camera(speakers, n_reps=1, n_images=5, show=True):
     calibrate the cameras.
 
     Args:
-        speakers (): rows from the speaker table. The speakers must have a LED attached
+        speakers (List): rows from the speaker table. The speakers must have a LED attached
         n_reps(int): number of repetitions for each target
         n_images(int): number of images taken for each head pose estimate
     Returns:
@@ -1066,12 +1072,12 @@ def localization_test_freefield(speakers, duration=0.5, n_reps=1, n_images=5, vi
     test! After every trial the listener has to point to the middle speaker at
     0 elevation and azimuth and press the button to indicate the next trial.
 
-    Args:
-        speakers : rows from the speaker table or index numbers_0-99_tts of the speakers.
+    Parameters:
+        speakers : rows from the speaker table or index numbers of the speakers.
         duration (float): duration of the noise played from the target positions in seconds
-        n_reps(int): number of repetitions for each target
-        n_images(int): number of images taken for each head pose estimate
-        visual(bool): If True, light a LED at the target position - the speakers must have a LED attached
+        n_reps (int): number of repetitions for each target
+        n_images (int): number of images taken for each head pose estimate
+        visual (bool): If True, light a LED at the target position - the speakers must have a LED attached
     Returns:
         instance of slab.Trialsequence: the response is stored in the data attribute as tuples with (azimuth, elevation)
     """
@@ -1114,7 +1120,7 @@ def localization_test_headphones(speakers, signals, n_reps=1, n_images=5, visual
     The procedure is the same as in localization_test_freefield().
 
     Args:
-        speakers : rows from the speaker table or index numbers_0-99_tts of the speakers.
+        speakers: rows from the speaker table or index numbers of the speakers.
         signals (array-like) : binaural sounds that are played. Must be ordered corresponding to the targets (first
             element of signals is played for the first row of targets etc.). If the elements of signals are
             instances of slab.Precomputed, a random one is drawn in each trial (useful if you don't want to repeat
@@ -1190,9 +1196,9 @@ def play_warning_sound(duration=.5, speaker=23):
 def set_logger(level, report=True):
     """
     Set the logger to a specific level.
+
     Parameters:
-        level: logging level. Only events of this level and above will be tracked. Can be 'DEBUG', 'INFO', 'WARNING',
-         'ERROR' or 'CRITICAL'. Set level to '
+        level (str): logging level. Only events of this level and above will be tracked. Can be 'DEBUG', 'INFO', 'WARNING','ERROR' or 'CRITICAL'. Set level to '
     """
     try:
         logger = logging.getLogger()
@@ -1206,26 +1212,15 @@ def set_logger(level, report=True):
 
 def check_setup(setup=None, button_control="keyboard"):
     """
-    Perform a manual hardware check of a loudspeaker setup.
+    Performs a manual hardware check of a loudspeaker setup.
 
     Each loudspeaker plays a recording of its own index. After playback,
-    the user can choose to continue, replay the current speaker, return
-    to the previous speaker, or abort the check.
+    the user can choose to continue (1), replay the current speaker (2), return
+    to the previous speaker (3), or abort the check (4).
 
-    Parameters
-    ----------
-    setup : str | Setup | None
-        Setup to check. Can be the name of a predefined setup or a custom
-        Setup object. If None, the currently initialized setup is used.
-    button_control: "keyboard" | "processor"
-        Type of button control to navigate through the speaker table. 
-
-    Controls
-    --------
-    1 : next speaker
-    2 : replay current speaker
-    3 : previous speaker
-    4 : abort check
+    Parameters:
+        setup (str | Setup | None): Setup to check. Can be the name of a predefined setup or a custom Setup object. If None, the currently initialized setup is used.
+        button_control (str): Type of button control to navigate through the speaker table. Available types are "keyboard" and "processor".
     """
 
     # Resolve the requested setup
@@ -1282,7 +1277,7 @@ def check_setup(setup=None, button_control="keyboard"):
 
     numbers_path = DIR / "data" / "sounds" / "numbers_0-99_tts"
 
-    #Plot setup
+    # Plot setup
 
     fig, ax, scatter = plot_setup(setup) # TODO: animate it, so that current speaker lights up in different color
 

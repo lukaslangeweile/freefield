@@ -1,14 +1,8 @@
-import math
-import matplotlib
-matplotlib.use("TkAgg")
-from mpl_toolkits.mplot3d import Axes3D
 import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d.art3d import Path3DCollection
 import numpy as np
 import freefield
 from freefield.setups import SETUPS, Setup
-from math import sqrt
-import slab
+
 
 def plot_setup(setup, close_threshold=0.20, label_offset=0.07):
     """

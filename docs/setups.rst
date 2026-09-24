@@ -8,7 +8,7 @@ setup hardware and TDT-processor configuration, while also giving you the opport
 Default Setups
 --------------
 As the freefield library was created with the anechoic experiment chamber of the University of Leipzig in mind, the default
-setups refer to the setups used in this lab ("arc" and "dome"), while a headphone-setups in the same laboratory ("headphones")
+setups refer to the setups used in this lab ("arc" and "dome"), while a headphone setup in the same laboratory ("headphones")
 and an array of speakers along the viewing axis ("distance array") are also represented. If you find yourself working with one of
 these setups, you can conveniently call them when initializing your setup, e.g.: ::
 
@@ -16,9 +16,9 @@ these setups, you can conveniently call them when initializing your setup, e.g.:
 
 Overview of Default Setups
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
-Below you find an quick introduction to the default setups you can choose from, as well as a visualization of their speaker arrangement.
+Below you find a quick introduction to the default setups you can choose from, as well as a visualization of their speaker arrangement.
 
-.. Note ::
+.. note ::
     You can view a dynamic 3D visualization of any setup by calling ::
 
         freefield.visualizations.plot_setup(setup)
@@ -26,9 +26,9 @@ Below you find an quick introduction to the default setups you can choose from, 
 
 Arc
 ...
-The Arc setups consists of 47 speakers arranges in an azimuthal arc around the listener position, spanning the range of
-azimuthal angles from -98.44 degree to 98.44 degree with 4.28 degree step sizes between two neighboring speakers.
-Use :attr:`setup="arc"` when calling :func:`freefield.initialize()` to initialize this setup.
+The rc setups consists of 47 speakers arranged in an azimuthal arc around the listener position, spanning the range of
+azimuthal angles from -98.44 degrees to 98.44 degrees with 4.28 degrees step sizes between two neighboring speakers.
+Use ``setup="arc"`` when calling :func:`freefield.initialize()` to initialize this setup.
 
 .. image:: images/arc_initial.png
     :width: 800
@@ -37,7 +37,7 @@ Use :attr:`setup="arc"` when calling :func:`freefield.initialize()` to initializ
 
 Dome
 ....
-The dome setup consists of 47 speakers spread across both the azimuthal and elevation plane. Use :attr:`setup="dome"`
+The dome setup consists of 47 speakers spread across both the azimuthal and elevation plane. Use ``setup="arc"``
 when calling :func:`freefield.initialize()` to initialize this setup.
 
 .. image:: images/dome_initial.png
@@ -51,7 +51,7 @@ Headphones
 Distance Array
 ..............
 The distance array consists of 11 speakers, positioned along the viewing axis across a total of 12 meters. Use
-:attr:`setup="distance_array"` when calling :func:`freefield.initialize()` to initialize this setup.
+``setup="distance_array"`` when calling :func:`freefield.initialize()` to initialize this setup.
 
 .. image:: images/distance_array_initial.png
   :width: 800
@@ -82,14 +82,14 @@ To use these default modes, initialize your setup as such:
 Customize your own Setup
 ------------------------
 In case you don't work with one of the setups mentioned above and want to implement your own experiment environment,
-you have the possiblity to do so by creating your own :class:`Setup` object:
+you have the possibility to do so by creating your own :class:`Setup` object:
 
 ::
 
     import freefield
     from freefield.setups import Setup
 
-    # Define your costume setup
+    # Define your custom setup
     # Make sure you have a speaker_table (Calibration file is optional)
 
     my_setup = Setup(
@@ -99,8 +99,8 @@ you have the possiblity to do so by creating your own :class:`Setup` object:
         playback_processors=("RX81", "RX82"),
         )
 
-    # Your costum setup can be passed directly to initialize
-    # Hoever, you cant use default modes and
+    # Your custom setup can be passed directly to initialize
+    # However, you can't use default modes and
     # you will need to input the processor configuration explicitly
 
     freefield.initialize(
@@ -110,7 +110,7 @@ you have the possiblity to do so by creating your own :class:`Setup` object:
             ['RX82', 'RX8', 'path/to/processor_configuration.rcx']
         ]
     )
-.. Note::
+.. note::
     For a custom setup, providing a speaker table is necessary. See `Speaker Table`_ on how to create one). You don't have to
     provide a calibration file, however a lot of psychoacoustic paradigms will require your setup to be calibrated. See `Loudspeaker Equalization`
     on how to create a calibration.
@@ -132,23 +132,23 @@ A simple example of a speaker table looks like this:
 
 Each row represents one loudspeaker. The first line contains the column names:
 
-    - :attr:`index_number`: Unique speaker index used by freefield, for example in :func:`freefield.pick_speakers().
-    - :attr:`channel`: Analog output channel to which the speaker is connected.
-    - :attr:`analog_proc`: Name of the processor providing the analog output, for example RX81 or RX82.
-    - :attr:`azi`: Speaker azimuth in degrees. Negative values indicate positions to the left, positive values positions to the right.
-    - :attr:`ele`: Speaker elevation in degrees. 0 corresponds to ear level, with positive values above and negative values below.
-    - :attr:`dist`: Distance between the listener and the speaker.
-    - :attr:`bit`: Digital output bit associated with the speaker, if required by the setup.
-    - :attr:`digital_proc`: Processor controlling the corresponding digital output.
+    - ``index_number``: Unique speaker index used by freefield, for example in :func:`freefield.pick_speakers()`.
+    - ``channel``: Analog output channel to which the speaker is connected.
+    - ``analog_proc``: Name of the processor providing the analog output, for example RX81 or RX82.
+    - ``azi``: Speaker azimuth in degrees. Negative values indicate positions to the left, positive values positions to the right.
+    - ``ele``: Speaker elevation in degrees. 0 corresponds to ear level, with positive values above and negative values below.
+    - ``dist``: Distance between the listener and the speaker in meters.
+    - ``bit``: Digital output bit associated with the speaker, if required by the setup. Optional.
+    - ``digital_proc``: Processor controlling the corresponding digital output. Optional.
 
 Configuration File
 ^^^^^^^^^^^^^^^^^
-The processors from Tucker-Davis Technologies require to be leaded with a circuit to perform as demanded. Those circuits
-can be created with TDT's graphical programming interface and are saved in the .rcx format. The operation defined by the
+TDT processors must be loaded with a processing circuit that defines their behavior. These circuits are created in RPvdsEx and stored as .rcx files.
+Those circuits can be created with TDT's graphical programming interface and are saved in the .rcx format. The operation defined by the
 circuit will be executed as the device is run.
 If you want to understand more about programming these circuits,
 check out the `documentation <https://www.tdt.com/files/manuals/RPvdsEx_Manual.pdf>`_ provided by TDT. If you
-downloaded the TDT software (see :ref:`Installation`) you can check put some examples in the freefield/data/rcx/ folder.
+downloaded the TDT software (see :ref:`Installation`) you can check out some examples in the freefield/data/rcx/ folder.
 
 
 
