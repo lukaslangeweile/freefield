@@ -661,7 +661,7 @@ def apply_equalization(signal, speaker, level=True, frequency=True):
     if level:
         if speaker.level is None:
             raise ValueError("speaker not level-equalized! Load an existing equalization of calibrate the setup!")
-        equalized_signal.level = speaker.level
+        equalized_signal.level += speaker.level
     if frequency:
         if speaker.filter is None:
             raise ValueError("speaker not frequency-equalized! Load an existing equalization of calibrate the setup!")
@@ -792,22 +792,24 @@ def equalize_speakers(speakers="all", reference_speaker=23, bandwidth=1 / 10, th
         file_name.rename(file_name.parent / (file_name.stem + date + file_name.suffix))
     with open(file_name, 'wb') as f:  # save the newly recorded calibration
         pickle.dump(equalization, f, pickle.HIGHEST_PROTOCOL)
+
 def _level_equalization(speakers, sound, reference_speaker, threshold):
     """
     Record the signal from each speaker in the list and return the level of each
     speaker relative to the target speaker(target speaker must be in the list)
     """
-    target_recording = play_and_record(reference_speaker, sound, equalize=False)
-    recordings = []
-    for speaker in speakers:
-        recordings.append(play_and_record(speaker, sound, equalize=False))
-    recordings = slab.Sound(recordings)
-    recordings.data[:, np.logical_and(recordings.level > target_recording.level-threshold,
-                    recordings.level < target_recording.level+threshold)] = target_recording.data
-    equalization_levels = target_recording.level - recordings.level
-    recordings.data[:, recordings.level < threshold] = target_recording.data  # thresholding
-    return target_recording.level / recordings.level
+    reference = play_and_record(reference_speaker, sound, equalize=False)
+    corrections_db = np.zeros(len(speakers), dtype=float)
+    for i, speaker in enumerate(speakers):
+        if speaker.index == reference_speaker.index:
+            continue
+        recording = play_and_record(speaker, sound, equalize=False)
 
+        difference_db = reference.level - recording.level
+        if abs(difference_db) > threshold:
+            corrections_db[i] = difference_db
+
+    return corrections_db
 def _frequency_equalization(speakers, sound, reference_speaker, calibration_levels, bandwidth,
                             low_cutoff, high_cutoff, alpha, threshold):
     """
@@ -844,7 +846,7 @@ def test_equalization(speakers="all"):
     if speakers == "all":  # use the whole speaker table
         speakers = SPEAKERS
     else:
-        speakers = pick_speakers(SPEAKERS)
+        speakers = pick_speakers(speakers)
     for speaker in speakers:
         level_equalized = apply_equalization(not_equalized, speaker=speaker, level=True, frequency=False)
         full_equalized = apply_equalization(not_equalized, speaker=speaker, level=True, frequency=True)
@@ -1219,8 +1221,6 @@ def set_logger(level, report=True):
     except AttributeError:
         raise AttributeError("Choose from 'DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'")
 
-
-
 def check_setup(setup=None, button_control="keyboard"):
     """
     Performs a manual hardware check of a loudspeaker setup.
@@ -1289,13 +1289,11 @@ def check_setup(setup=None, button_control="keyboard"):
     numbers_path = DIR / "data" / "sounds" / "numbers_0-99_tts"
 
     # Plot setup
-
     fig, ax, scatter = plot_setup(setup) # TODO: animate it, so that current speaker lights up in different color
 
     # Set up the navigation stacks
     st_active = list(reversed(speakers))
     st_done = []
-
 
     # work through the stack
     while st_active:
@@ -1337,8 +1335,8 @@ def check_setup(setup=None, button_control="keyboard"):
             keyboard_response = {"value": None}
 
             def on_key_press(event):
-                if event.key in ("1", "2", "3"):
-                    keyboard_response["value"] = event.key
+                if event.key in ("1", "2", "3", "4"):
+                    keyboard_response["value"] = int(event.key)
 
             # Listen for keyboard input in the matplotlib window
             connection_id = fig.canvas.mpl_connect(
@@ -1361,14 +1359,13 @@ def check_setup(setup=None, button_control="keyboard"):
                 "Expected 'processor' or 'keyboard'."
             )
 
-
-        if response == "1":
+        if response == 1:
             # confirm speaker
             st_done.append(speaker)
-        elif response == "2":
+        elif response == 2:
             # repeat speaker
             st_active.append(speaker)
-        elif response == "3":
+        elif response == 3:
             # go back
             if st_done:
                 previous_speaker = st_done.pop()
@@ -1377,7 +1374,7 @@ def check_setup(setup=None, button_control="keyboard"):
             else:
                 # if no previous speaker: replay this speaker
                 st_active.append(speaker)
-        elif response == "4":
+        elif response == 4:
             # leave the check
             break
         else:
