@@ -17,4 +17,5 @@ writing to and reading from buffers, recording signals or creating loudspeaker e
    getting_started
    setups
    worked_examples
+   headpose
    reference
