@@ -135,7 +135,7 @@ def test_polar_to_single_pole(
         expected
 ):
     result = polar_to_single_pole(phi=phi, theta=theta)
-    assert result == pytest.approx(expected, result)
+    assert result == pytest.approx(expected)
 
 def test_polar_to_single_pole_accepts_arrays():
     phi = np.array([0, 30, -30])
