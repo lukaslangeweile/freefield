@@ -2,6 +2,7 @@ import numpy as np
 import pytest
 import slab
 import pickle
+from unittest.mock import MagicMock
 
 import freefield.freefield as ff
 import freefield.setups as setups
@@ -11,6 +12,50 @@ import matplotlib
 matplotlib.use("Agg")
 
 import matplotlib.pyplot as plt
+
+
+@pytest.mark.parametrize("setup", [setups.DOME, setups.DISTANCE_ARRAY])
+@pytest.mark.parametrize(
+    "function_name,arguments,mode",
+    [
+        ("equalize_headphones", (), "bi_play_rec"),
+        ("equalize_speakers", (), "play_rec"),
+        ("test_equalization", (), "play_rec"),
+        ("calibrate_camera", ([],), "cam_calibration"),
+        ("calibrate_camera_no_visual", ([],), "cam_calibration"),
+        ("localization_test_freefield", ([],), "loctest_freefield"),
+        ("localization_test_headphones", ([], []), "loctest_headphones"),
+        ("check_setup", (), "loctest_freefield"),
+    ],
+)
+def test_mode_switch_uses_active_setup(
+    monkeypatch, setup, function_name, arguments, mode
+):
+    """Run each mode switch through Processors without connecting to hardware."""
+    from freefield.processors import Processors
+
+    class ConfigurationReady(Exception):
+        pass
+
+    processors = Processors()
+    processors.initialize = MagicMock(side_effect=ConfigurationReady)
+    monkeypatch.setattr(ff, "SETUP", setup)
+    monkeypatch.setattr(ff, "PROCESSORS", processors)
+    monkeypatch.setattr(ff, "CAMERAS", MagicMock())
+
+    # Stop after configuration reaches the hardware boundary, before playback,
+    # user interaction, calibration, or writing files.
+    with pytest.raises(ConfigurationReady):
+        getattr(ff, function_name)(*arguments)
+
+    processors.initialize.assert_called_once()
+    devices, zbus, connection = processors.initialize.call_args.args
+    config = setup.default_modes[mode]
+    assert [device[0] for device in devices] == [p.name for p in config.processors]
+    assert zbus is config.zbus
+    assert connection == config.connection
+    assert processors.mode == mode
+    assert ff.SETUP is setup
 
 
 # =============================================================================
@@ -414,11 +459,20 @@ def test_load_equalization_ignores_filter_if_false(
     assert load_equalization_speakers[3].filter is None
 
 @pytest.fixture
-def test_setup():
+def test_setup(
+        tmp_path,
+        monkeypatch
+):
+    monkeypatch.setattr(
+        ff,
+        "DIR",
+        tmp_path
+    )
+
     return setups.Setup(
         name="test_setup",
-        speaker_table="tables/speakertable_test_setup.txt",
-        calibration_file="calibration_test_setup.pkl",
+        speaker_table= ff.DIR / 'data'/ 'speakertable_test_setup.txt',
+        calibration_file= ff.DIR / 'data' /'calibration_test_setup.pkl',
         playback_processors=("RX81", "RX82"),
         recording_processor="RP2",
     )

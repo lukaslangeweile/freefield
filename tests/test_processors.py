@@ -17,7 +17,6 @@ import pytest
 
 
 processors_module = importlib.import_module("freefield.processors")
-freefield_module = importlib.import_module("freefield.freefield")
 Processors = processors_module.Processors
 
 
@@ -775,13 +774,10 @@ def test_initialize_default_builds_expected_configuration_for_dome(
     processors,
     mode,
     expected_circuits,
-    monkeypatch
 ):
-    monkeypatch.setattr(processors_module.freefield, "SETUP", setups.DOME)
-
     processors.initialize = MagicMock()
 
-    processors.initialize_default(mode=mode)
+    processors.initialize_default(setup=setups.DOME, mode=mode)
 
     processors.initialize.assert_called_once()
 
@@ -862,16 +858,13 @@ def test_initialize_default_builds_expected_configuration_for_dome(
     ],
 )
 def test_initialize_default_builds_expected_configuration_for_arc(
-        processors,
-        mode,
-        expected_circuits,
-        monkeypatch
+    processors,
+    mode,
+    expected_circuits,
 ):
-    monkeypatch.setattr(processors_module.freefield, "SETUP", setups.ARC)
-
     processors.initialize = MagicMock()
 
-    processors.initialize_default(mode=mode)
+    processors.initialize_default(setup=setups.ARC, mode=mode)
 
     processors.initialize.assert_called_once()
 
@@ -946,16 +939,13 @@ def test_initialize_default_builds_expected_configuration_for_arc(
     ],
 )
 def test_initialize_default_builds_expected_configuration_for_distance_array(
-    monkeypatch,
     processors,
     mode,
     expected_circuits,
 ):
-
-    monkeypatch.setattr(processors_module.freefield, "SETUP", setups.DISTANCE_ARRAY)
     processors.initialize = MagicMock()
 
-    processors.initialize_default(mode=mode)
+    processors.initialize_default(setup=setups.DISTANCE_ARRAY, mode=mode)
 
     processors.initialize.assert_called_once()
 
@@ -981,22 +971,30 @@ def test_initialize_default_builds_expected_configuration_for_distance_array(
     assert processors.mode == mode
 
 
-def test_initialize_default_is_case_insensitive(processors, monkeypatch):
+def test_initialize_default_is_case_insensitive(processors):
     processors.initialize = MagicMock()
-    monkeypatch.setattr(processors_module.freefield, "SETUP", setups.DOME)
 
-    processors.initialize_default(mode="PLAY_REC")
+    processors.initialize_default(setup=setups.DOME, mode="PLAY_REC")
 
     processors.initialize.assert_called_once()
     assert processors.mode == "play_rec"
 
 
-def test_initialize_default_rejects_unknown_mode(processors, monkeypatch):
-    monkeypatch.setattr(processors_module.freefield, "SETUP", setups.DOME)
+def test_initialize_default_rejects_unknown_mode(processors):
     with pytest.raises(
         ValueError
     ):
-        processors.initialize_default(mode="unknown")
+        processors.initialize_default(setup=setups.DOME, mode="unknown")
+
+
+def test_initialize_default_rejects_missing_setup(processors):
+    processors.initialize = MagicMock()
+
+    with pytest.raises(RuntimeError, match="No setup initialized"):
+        processors.initialize_default(setup=None, mode="play_rec")
+
+    processors.initialize.assert_not_called()
+    assert processors.mode is None
 
 
 # ---------------------------------------------------------------------------

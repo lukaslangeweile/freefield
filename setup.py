@@ -47,7 +47,7 @@ setup(name='freefield',
       },
       packages=find_packages(),
       package_data={'freefield': ['data/tables/*', 'data/sounds/*', 'data/sounds/USOs/*',
-                                  'data/sounds/tts-numbers_n13_resamp_48828/*', 'data/sounds/numbers_0-99_tts/*'
+                                  'data/sounds/tts-numbers_n13_resamp_48828/*', 'data/sounds/numbers_0-99_tts/*',
                                   'data/rcx/*', 'data/models/*',
                                   'data/models/pose_model/*',
                                   'data/models/pose_model/variables/*',
