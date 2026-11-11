@@ -1,7 +1,6 @@
 from pathlib import Path
 import numpy as np
 from freefield import DIR
-import freefield
 import os.path
 import random
 import logging
@@ -56,8 +55,7 @@ class Processors(object):
         if self.mode is None:
             self.mode = "custom"
 
-    def initialize_default(self, mode):
-        setup = freefield.SETUP
+    def initialize_default(self,setup, mode):
 
         if setup is None:
             raise RuntimeError(
