@@ -15,7 +15,6 @@ CAMERA_REQUIRES = [
     "opencv-python",
     "headpose",
     "pillow",
-    "PySpin"
 ]
 
 SENSOR_REQUIRES = [

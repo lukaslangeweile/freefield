@@ -45,7 +45,7 @@ Should you want to use the cameras, import this:
 
 .. code-block::bash
 
-    pip install "freefield[cameras]"
+    pip install "freefield[camera]"
 
 
 
