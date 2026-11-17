@@ -97,7 +97,8 @@ you have the possibility to do so by creating your own :class:`Setup` object:
         speaker_table="/path/to/setup_speaker_table.txt",
         calibration_file="/path/to/setup_calibration_file.pkl",
         playback_processors=("RX81", "RX82"),
-        )
+        recording_processor=None,
+    )
 
     # Your custom setup can be passed directly to initialize
     # However, you can't use default modes and
@@ -110,10 +111,11 @@ you have the possibility to do so by creating your own :class:`Setup` object:
             ['RX82', 'RX8', 'path/to/processor_configuration.rcx']
         ]
     )
+
 .. note::
-    For a custom setup, providing a speaker table is necessary. See `Speaker Table`_ on how to create one). You don't have to
-    provide a calibration file, however a lot of psychoacoustic paradigms will require your setup to be calibrated. See `Loudspeaker Equalization`
-    on how to create a calibration.
+    A custom setup requires a speaker table. See `Speaker Table`_ for its format.
+    A calibration file is optional. Experiments that use equalized playback
+    require a calibration created with :func:`freefield.freefield.equalize_speakers`.
 
 Speaker Table
 ^^^^^^^^^^^^^
@@ -142,13 +144,13 @@ Each row represents one loudspeaker. The first line contains the column names:
     - ``digital_proc``: Processor controlling the corresponding digital output. Optional.
 
 Configuration File
-^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^
 TDT processors must be loaded with a processing circuit that defines their behavior. These circuits are created in RPvdsEx and stored as .rcx files.
 Those circuits can be created with TDT's graphical programming interface and are saved in the .rcx format. The operation defined by the
 circuit will be executed as the device is run.
 If you want to understand more about programming these circuits,
 check out the `documentation <https://www.tdt.com/files/manuals/RPvdsEx_Manual.pdf>`_ provided by TDT. If you
-downloaded the TDT software (see :ref:`Installation`) you can check out some examples in the freefield/data/rcx/ folder.
+downloaded the TDT software (see :ref:`installation`), you can find examples in ``freefield/data/rcx/``.
 
 
 

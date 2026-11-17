@@ -1,0 +1,72 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "freefield"
+dynamic = ["version"]
+authors = [
+    {name = "Ole Bialas", email = "ole.bialas@ukbonn.de"},
+    {name = "Paul Friedrich", email = "paul.friedrich@uni-leipzig.de"},
+    {name = "Lukas Lange", email = "lukas.lange01@gmail.com"},
+    {name = "Marc Schönwiesner", email = "marcs@uni-leipzig.de"}]
+description = "A Toolbox for Psychoacoustic Experiments"
+readme = "README.md"
+requires-python = ">=3.8"
+keywords = ["Psychoacoustics", "TDT", "Tucker Davis Technologies"]
+license = {file = "LICENSE.txt"}
+dependencies = ['numpy',
+                'setuptools',
+                'pandas',
+                'matplotlib',
+                'scipy',
+                'slab']
+classifiers = [
+    "Developmental Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering :: Instrument Drivers",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12"]
+
+
+[project.optional-dependencies]
+camera = [
+    "opencv-python<5",
+    "headpose",
+    "pillow",
+]
+sensor = [
+    "metawear",
+]
+headpose = ["freefield[camera, sensor]"]
+
+
+#[project.urls]
+#Documentation = ""
+#Repository = ""
+#Issues = ""
+
+[tool.setuptools.packages.find]
+include = ["freefield", "freefield.*"]
+namespaces = false
+
+[tool.setuptools.package-data]
+freefield = [
+    "data/tables/*",
+    "data/sounds/*",
+    "data/sounds/USOs/*",
+    "data/sounds/tts-numbers_n13_resamp_48828/*",
+    "data/sounds/numbers_0-99_tts/*",
+    "data/rcx/*",
+    "data/models/*",
+    "data/models/pose_model/*",
+    "data/models/pose_model/variables/*",
+    "old_tests/*",
+    "old_tests/images/*",
+]
+
+[tool.setuptools.dynamic]
+version = {attr = "freefield.__version__"}

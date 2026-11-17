@@ -1,83 +1,104 @@
 Getting Started
 ===============
 
+.. _installation:
+
 Installation
 ############
 
-.. _Installation:
+Freefield requires Python 3.8 or later. The Linux CI covers Python 3.8 and 3.12.
+For FLIR cameras, choose a Python version supported by the Spinnaker SDK and its
+Python wheel for your operating system and architecture.
 
-The installation consists of two parts - the Python dependencies and the drivers for the hardware.
-The latter is only relevant if you actually use the devices and is not required if you merely want to play around with the code.
+Python environment
+^^^^^^^^^^^^^^^^^^
 
-Python dependencies
-^^^^^^^^^^^^^^^^^^^
-We recommend using Anaconda for the installation. If you are new to Python, take a look at the `install guide <https://www.anaconda.com/docs/getting-started/installation>`_ for Anaconda.
-
-Once you installed Anaconda, create a new environment with the correct Python version (name it "freefield" for example):
-
-.. code-block:: bash
-
-    conda create --name freefield python=3.8
-
-.. note::
-    To use all the functionalities of freefield, Python 3.8 is required. However, if you do not plan to use head pose estimation you also can use more recent versions.
-
-Activate the environment and install pip, which is necessary to install other Python packages:
+Create and activate a separate environment. This example uses Conda with
+Python 3.12.
 
 .. code-block:: bash
 
+    conda create --name freefield python=3.12 pip
     conda activate freefield
-    conda install pip
 
-Finally, you have to obtain the freefield package from GitHub:
+Python package
+^^^^^^^^^^^^^^
 
-.. code-block:: bash
+Clone or download the Freefield version you want to use and run the appropriate
+command from the root of that checkout. Pip installs the Python dependencies
+for the selected configuration.
 
-    pip install git+https://github.com/pfriedrich-hub/freefield.git
+.. list-table::
+   :header-rows: 1
 
-If you plan on using head tracking using the motion sensor, also do this:
+   * - Use case
+     - Command
+   * - Base installation
+     - ``python -m pip install .``
+   * - Webcam or camera-based head pose estimation
+     - ``python -m pip install ".[camera]"``
+   * - Motion sensor
+     - ``python -m pip install ".[sensor]"``
+   * - Camera and motion sensor
+     - ``python -m pip install ".[camera,sensor]"``
 
-.. code-block::bash
+The camera extra includes OpenCV, Pillow, and the ``headpose`` package, which
+uses PyTorch and Torchvision. For a FLIR camera, install the camera extra and
+the matching Spinnaker SDK and Python wheel.
 
-    pip install "freefield[sensor]"
+TDT processors
+^^^^^^^^^^^^^^
 
-Should you want to use the cameras, import this:
-
-.. code-block::bash
-
-    pip install "freefield[cameras]"
-
-
-
-If you are only interested in playing around with the code, this is already sufficient and you can head
-to the `First Steps`_ section. However, if you want to use the experimental setup,
-continue with the hardware drivers section.
-
-Hardware drivers
-^^^^^^^^^^^^^^^^
-
-.. note::
-    Unfortunately, communication with TDT devices relies on the pywin32 package, which is only available for Windows.
-    You can still use freefield on Mac OS or Linux to your experiment code, but connection to the actual processors will be simulated via a dummy.
-
-To use the functionalities of the processors you have to download and install the drivers from the
-`TDT Homepage <https://www.tdt.com/support/downloads/>`_   (install TDT Drivers/RPvdsEx as well as ActiveX Controls).
-
-The communication with these processors relies on the pywin32 package. Since installing it with pip can result
-in a faulty version, using conda is recommended:
+On Windows, install the TDT drivers, RPvdsEx, and ActiveX Controls from
+`TDT Downloads <https://www.tdt.com/support/downloads/>`_. Then install the
+Python bindings for ActiveX in your Freefield environment.
 
 .. code-block:: bash
 
-   conda install pywin32
+    conda install pywin32
 
-Finally, to use cameras from the manufacturer FLIR systems, you have to install their Python API (Python version >3.8 is not supported).
-Go to the `download page <https://meta.box.lenovo.com/v/link/view/a1995795ffba47dbbe45771477319cc3>`_ and select the correct file for your OS and Python version. For example, if you are using
-a 64-Bit Windows and Python 3.8 download spinnaker_python-2.2.0.48-cp38-cp38-win_amd64.zip.
-Unpack the .zip file and select the folder. There should be a file inside that ends with `.whl` - install it using pip:
+On macOS and Linux, Freefield simulates the TDT processor connection.
+
+FLIR cameras
+^^^^^^^^^^^^
+
+Install the `Teledyne Spinnaker SDK <https://www.teledynevisionsolutions.com/products/spinnaker-sdk>`_
+and obtain the Python wheel for the **same SDK version**. Select the wheel for
+your CPython version, operating system, and architecture. A wheel tagged
+``cp312-cp312-win_amd64`` targets 64-bit CPython 3.12 on Windows. Consult the
+`Spinnaker Python installation guide <https://softwareservices.flir.com/Spinnaker/4.4/getting-started/python.html>`_
+for SDK 4.4, or use the guide for your installed SDK version.
+
+Install the downloaded wheel in the active Freefield environment. Replace the
+example path with your wheel's path.
 
 .. code-block:: bash
 
-    pip install spinnaker_python-2.2.0.48-cp38-cp38-win_amd64.whl
+    python -m pip install "path/to/spinnaker_python-4.4.0.249-cp312-cp312-win_amd64.whl"
+    python -c "import PySpin; print(PySpin.System)"
+
+The Spinnaker wheel provides the ``PySpin`` import. The
+`pyspin project on PyPI <https://pypi.org/project/pyspin/>`_ is a terminal spinner.
+
+Verify the installation
+^^^^^^^^^^^^^^^^^^^^^^^
+
+From outside the checkout, run the following commands to check the installed
+package and its loudspeaker table.
+
+.. code-block:: bash
+
+    python -m pip check
+    python -c "import freefield; print(freefield.__version__); print(len(freefield.read_speaker_table('dome')))"
+
+If you installed the camera extra, check its imports as well.
+
+.. code-block:: bash
+
+    python -c "import cv2; from headpose import PoseEstimator; print(cv2.__version__)"
+
+For a FLIR installation, also check that the camera can acquire an image and
+that Freefield can estimate head pose on the lab computer.
 
 First Steps
 ###########

@@ -29,32 +29,37 @@ SETUP: Optional[Setup] = None   # the currently active setup - "dome" or "arc"
 def initialize(setup, default=None, device=None, zbus=True, connection="GB", camera=None, sensor_tracking=False,
                calibration_file=None):
     """
-    Initialize the device and load table (and calibration) for the selected setup. Once initialized,
-    the setup runs until `halt()` is called. Initialzing device which are already running will flush them.
+    Initialize the devices, speaker table, and calibration for a setup.
+
+    The setup runs until `halt()` is called.
 
     Parameters:
-        setup (str| setups.Setup()): which setup to load, can be 'dome', 'arc', 'distance_array' or 'headphones', also qccepts custom setups
-        default (str | None): initialize() the setup using one of the default settings which are:
-            'play_rec': play sounds using two RX8s (or one RX8 in case of the distance_array setup) and record them with a RP2
-            'play_birec': same as 'play_rec' but record from two microphone channels
-            'loctest_freefield': sound localization test under freefield conditions
-            'loctest_headphones': localization test with headphones
-            'cam_calibration': calibrate cameras for headpose estimation
-        device (list | None): A list which contains the name given to the device, it's model and the path to the
-            .rcx file to be loaded. To initialize() multiple devices at once, pass a list of lists where each sub-list
-             contains [name, model, file] for one device.
-        zbus (bool): whether or not to initialize() the zbus interface for sending triggers.
-        connection (str): type of connection to device, can be "GB" (optical) or "USB"
-        camera (str | None): kind of camera that is initialized, can be "webcam", "flir".
-        sensor_tracking (boolean): If True, initialize() head tracking sensor.
+        setup (str | Setup): A predefined setup name or a custom setup.
+        default (str | None): Name of a default mode for the setup.
+
+            * ``play_rec``: Play sounds on the RX8 processors and record on the RP2.
+            * ``play_birec``: Play sounds and record from two microphone channels.
+            * ``loctest_freefield``: Run a loudspeaker localization test.
+            * ``loctest_headphones``: Run a headphone localization test.
+            * ``cam_calibration``: Calibrate cameras for head pose estimation.
+
+        device (list | None): Custom processor configuration. Each entry
+            contains the processor name, model, and RCX file. Supply either
+            ``device`` or ``default``.
+        zbus (bool): Whether to initialize ZBus for a custom processor configuration.
+        connection (str): Connection type for a custom configuration, either
+            ``GB`` (optical) or ``USB``.
+        camera (str | None): Camera type, either ``webcam`` or ``flir``.
+        sensor_tracking (bool): Whether to initialize the motion sensor.
+        calibration_file (str | pathlib.Path | None): Optional override for the
+            setup's calibration file.
+
     Examples:
-        >>> from freefield import initialize(), DIR
-        >>> # initialize() the dome setup with one RX8 processor along with the FLIR cameras:
-        >>> initialize()(setup="dome", device=['RX8', 'RX8', 'play_buf.rcx'], camera="flir")
-        >>> # initialize() the arc with two RX8's which are names "RX81" and "RX82":
-        >>> initialize()(setup="arc", device=[['RX81', 'RX8', 'play_buf.rcx'], ['RX82', 'RX8', 'play_buf.rcx']])
-        >>> # use the default settings for a freefield localization test:
-        >>> initialize()(setup="dome", default="loctest_freefield")
+        >>> from freefield import initialize
+        >>> initialize(setup="dome", default="loctest_freefield")
+        >>> initialize(setup="dome", default="loctest_freefield", camera="flir")
+        >>> initialize(setup="arc", device=[["RX81", "RX8", "play_buf.rcx"],
+        ...                                 ["RX82", "RX8", "play_buf.rcx"]])
     """
     global PROCESSORS, CAMERAS, SETUP, SPEAKERS, SENSOR
     # initialize() device and environment
@@ -558,15 +563,17 @@ def play_and_record_headphones(speaker, sound, compensate_delay=True, distance=0
     rec still have the same length. For this to work, the circuits rec_buf.rcx
     and play_buf.rcx have to be initialized on RP2 and RX8s and the mic must
     be plugged in.
+
     Parameters:
         speaker (string): A string specifying the headphone speakers to play from.
-                Can be 'left', 'right', or 'both'.
+            Can be 'left', 'right', or 'both'.
         sound: instance of slab.Sound, signal that is played from the speaker
         distance: distance between sound sources and microphone (symmetric)
         compensate_delay: bool, compensate the delay between play and record
         compensate_attenuation:
         equalize:
         recording_samplerate: samplerate of the recording
+
     Returns:
         rec: 2-D array, recorded signal
     """
@@ -661,7 +668,7 @@ def apply_equalization(signal, speaker, level=True, frequency=True):
     if level:
         if speaker.level is None:
             raise ValueError("speaker not level-equalized! Load an existing equalization of calibrate the setup!")
-        equalized_signal.level = speaker.level
+        equalized_signal.level += speaker.level
     if frequency:
         if speaker.filter is None:
             raise ValueError("speaker not frequency-equalized! Load an existing equalization of calibrate the setup!")
@@ -670,29 +677,26 @@ def apply_equalization(signal, speaker, level=True, frequency=True):
 
 def equalize_headphones(bandwidth=1/10, threshold=.3, low_cutoff=100, high_cutoff=16000, alpha=1.0, file_name=None):
     """
-       Equalize the headphones in two steps. First: equalize over all
-       level differences by a constant for each speaker. Second: remove spectral
-       difference by inverse filtering. For more details on how the
-       inverse filters are computed see the documentation of slab.Filter.equalizing_filterbank
+    Equalize the headphones in two steps. First: equalize over all
+    level differences by a constant for each speaker. Second: remove spectral
+    difference by inverse filtering. For more details on how the
+    inverse filters are computed see the documentation of slab.Filter.equalizing_filterbank
 
-       Parameters:
-           bandwidth (float): Width of the filters, used to divide the signal into subbands, in octaves. A small
-               bandwidth results in a fine tuned transfer function which is useful for equalizing small notches.
-           threshold (float): Threshold for level equalization. Correct level only for speakers that deviate more
-               than <threshold> dB from reference speaker
-           low_cutoff (int | float): The lower limit of frequency equalization range in Hz.
-           high_cutoff (int | float): The upper limit of frequency equalization range in Hz.
-           alpha (float): Filter regularization parameter. Values below 1.0 reduce the filter's effect, values above
-               amplify it. WARNING: large filter gains may result in temporal distortions of the sound
-           file_name (str): Name of the file to store equalization parameters.
+    Parameters:
+        bandwidth (float): Width of the filters, used to divide the signal into subbands, in octaves. A small
+            bandwidth results in a fine tuned transfer function which is useful for equalizing small notches.
+        threshold (float): Threshold for level equalization. Correct level only for speakers that deviate more
+            than <threshold> dB from reference speaker
+        low_cutoff (int | float): The lower limit of frequency equalization range in Hz.
+        high_cutoff (int | float): The upper limit of frequency equalization range in Hz.
+        alpha (float): Filter regularization parameter. Values below 1.0 reduce the filter's effect, values above
+            amplify it. WARNING: large filter gains may result in temporal distortions of the sound
+        file_name (str): Name of the file to store equalization parameters.
 
-        Returns:
-            dict[str], dict[str, float | np.ndarray]]:
-                Equalization parameters for each speaker. The outer dictionary is keyed
-                by the speaker index as a string. Each speaker entry contains:
-                    - ``"level"``: equalization level for the speaker.
-                    - ``"filter"``: equalization filter coefficients for the speaker.
-       """
+    Returns:
+        dict: Equalization parameters keyed by the speaker index as a string.
+            Each entry contains the ``"level"`` correction and the ``"filter"``.
+    """
     if not PROCESSORS:
         raise RuntimeError("PROCESSORS is not initialized. Call freefield.initialize() first.")
     if not PROCESSORS.mode == "bi_play_rec":
@@ -792,22 +796,24 @@ def equalize_speakers(speakers="all", reference_speaker=23, bandwidth=1 / 10, th
         file_name.rename(file_name.parent / (file_name.stem + date + file_name.suffix))
     with open(file_name, 'wb') as f:  # save the newly recorded calibration
         pickle.dump(equalization, f, pickle.HIGHEST_PROTOCOL)
+
 def _level_equalization(speakers, sound, reference_speaker, threshold):
     """
     Record the signal from each speaker in the list and return the level of each
     speaker relative to the target speaker(target speaker must be in the list)
     """
-    target_recording = play_and_record(reference_speaker, sound, equalize=False)
-    recordings = []
-    for speaker in speakers:
-        recordings.append(play_and_record(speaker, sound, equalize=False))
-    recordings = slab.Sound(recordings)
-    recordings.data[:, np.logical_and(recordings.level > target_recording.level-threshold,
-                    recordings.level < target_recording.level+threshold)] = target_recording.data
-    equalization_levels = target_recording.level - recordings.level
-    recordings.data[:, recordings.level < threshold] = target_recording.data  # thresholding
-    return target_recording.level / recordings.level
+    reference = play_and_record(reference_speaker, sound, equalize=False)
+    corrections_db = np.zeros(len(speakers), dtype=float)
+    for i, speaker in enumerate(speakers):
+        if speaker.index == reference_speaker.index:
+            continue
+        recording = play_and_record(speaker, sound, equalize=False)
 
+        difference_db = reference.level - recording.level
+        if abs(difference_db) > threshold:
+            corrections_db[i] = difference_db
+
+    return corrections_db
 def _frequency_equalization(speakers, sound, reference_speaker, calibration_levels, bandwidth,
                             low_cutoff, high_cutoff, alpha, threshold):
     """
@@ -844,7 +850,7 @@ def test_equalization(speakers="all"):
     if speakers == "all":  # use the whole speaker table
         speakers = SPEAKERS
     else:
-        speakers = pick_speakers(SPEAKERS)
+        speakers = pick_speakers(speakers)
     for speaker in speakers:
         level_equalized = apply_equalization(not_equalized, speaker=speaker, level=True, frequency=False)
         full_equalized = apply_equalization(not_equalized, speaker=speaker, level=True, frequency=True)
@@ -1219,8 +1225,6 @@ def set_logger(level, report=True):
     except AttributeError:
         raise AttributeError("Choose from 'DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'")
 
-
-
 def check_setup(setup=None, button_control="keyboard"):
     """
     Performs a manual hardware check of a loudspeaker setup.
@@ -1289,13 +1293,11 @@ def check_setup(setup=None, button_control="keyboard"):
     numbers_path = DIR / "data" / "sounds" / "numbers_0-99_tts"
 
     # Plot setup
-
-    fig, ax, scatter = plot_setup(setup) # TODO: animate it, so that current speaker lights up in different color
+    fig, ax, scatter = plot_setup(target_setup) # TODO: animate it, so that current speaker lights up in different color
 
     # Set up the navigation stacks
     st_active = list(reversed(speakers))
     st_done = []
-
 
     # work through the stack
     while st_active:
@@ -1337,8 +1339,8 @@ def check_setup(setup=None, button_control="keyboard"):
             keyboard_response = {"value": None}
 
             def on_key_press(event):
-                if event.key in ("1", "2", "3"):
-                    keyboard_response["value"] = event.key
+                if event.key in ("1", "2", "3", "4"):
+                    keyboard_response["value"] = int(event.key)
 
             # Listen for keyboard input in the matplotlib window
             connection_id = fig.canvas.mpl_connect(
@@ -1361,14 +1363,13 @@ def check_setup(setup=None, button_control="keyboard"):
                 "Expected 'processor' or 'keyboard'."
             )
 
-
-        if response == "1":
+        if response == 1:
             # confirm speaker
             st_done.append(speaker)
-        elif response == "2":
+        elif response == 2:
             # repeat speaker
             st_active.append(speaker)
-        elif response == "3":
+        elif response == 3:
             # go back
             if st_done:
                 previous_speaker = st_done.pop()
@@ -1377,7 +1378,7 @@ def check_setup(setup=None, button_control="keyboard"):
             else:
                 # if no previous speaker: replay this speaker
                 st_active.append(speaker)
-        elif response == "4":
+        elif response == 4:
             # leave the check
             break
         else:

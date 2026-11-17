@@ -8,11 +8,12 @@ Freefield can read the head orientation from an MbientLab MetaMotion (MetaWear) 
 sensor streams its orientation over Bluetooth LE at ~100 Hz; this is used to record localization responses: the
 participant turns the head towards the perceived sound source and presses a button.
 
-The sensor support needs the optional dependency ``mbientlab``:
+The sensor extra installs ``metawear``, which provides the ``mbientlab`` module.
+Run this command from the root of the Freefield checkout.
 
 .. code-block:: bash
 
-  pip install "freefield[sensor]"
+  python -m pip install ".[sensor]"
 
 Initialize the setup with ``sensor_tracking=True`` to scan for and connect to the sensor:
 

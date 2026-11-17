@@ -6,10 +6,14 @@ on:
       - tests
       - main
       - master
+      - release
     paths:
       - "**.py"
+      - "docs/**"
+      - "README.md"
+      - "MANIFEST.in"
+      - "LICENSE.txt"
       - "pyproject.toml"
-      - "setup.py"
       - "setup.cfg"
       - "requirements*.txt"
       - ".github/workflows/tests.yml"
@@ -19,10 +23,14 @@ on:
       - tests
       - main
       - master
+      - release
     paths:
       - "**.py"
+      - "docs/**"
+      - "README.md"
+      - "MANIFEST.in"
+      - "LICENSE.txt"
       - "pyproject.toml"
-      - "setup.py"
       - "setup.cfg"
       - "requirements*.txt"
       - ".github/workflows/tests.yml"
@@ -33,6 +41,8 @@ jobs:
   test:
     name: Python ${{ matrix.python-version }} tests
     runs-on: ubuntu-24.04
+    env:
+      MPLBACKEND: Agg
 
     strategy:
       fail-fast: false
@@ -50,19 +60,69 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
           cache: "pip"
+          cache-dependency-path: |
+            pyproject.toml
+            docs/requirements.txt
       - name: Install system dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y portaudio19-dev libportaudio2 libportaudiocpp0 libasound2-dev
-      - name: Install package and test dependencies
+      - name: Build the source distribution and wheel
         run: |
           python -m pip install --upgrade pip
-          
-          python -m pip install --upgrade pip setuptools wheel
-          pip install -e .
-          python -m pip install pytest
+          python -m pip install build
+          python -m build
 
+      - name: Verify the installed wheel
+        run: |
+          python -m pip install dist/*.whl
+          python -m pip check
+          cd "$RUNNER_TEMP"
+          python - <<'PY'
+          from importlib.metadata import metadata
+
+          import freefield
+          from freefield.setups import SETUPS
+
+          package_metadata = metadata("freefield")
+          assert not any(
+              requirement.lower().startswith("pyspin")
+              for requirement in package_metadata.get_all("Requires-Dist", [])
+          )
+          for setup in SETUPS.values():
+              assert freefield.read_speaker_table(setup), setup.name
+              for mode in setup.default_modes.values():
+                  for processor in mode.processors:
+                      circuit = freefield.DIR / "data" / "rcx" / processor.circuit
+                      assert circuit.is_file(), circuit
+          numbers = freefield.DIR / "data" / "sounds" / "numbers_0-99_tts"
+          for index in range(100):
+              sound = numbers / f"{index}.wav"
+              assert sound.is_file(), sound
+          print(f"Verified installed package at {freefield.__file__}")
+          PY
 
       - name: Run tests
         run: |
+          python -m pip install pytest
           python -m pytest -q
+
+      - name: Verify the camera extra in a separate environment
+        if: matrix.python-version == '3.12'
+        run: |
+          python -m venv "$RUNNER_TEMP/freefield-camera"
+          camera_python="$RUNNER_TEMP/freefield-camera/bin/python"
+          "$camera_python" -m pip install --upgrade pip
+          "$camera_python" -m pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+          wheel=(dist/freefield-*.whl)
+          "$camera_python" -m pip install "${wheel[0]}[camera]"
+          "$camera_python" -m pip check
+          cd "$RUNNER_TEMP"
+          "$camera_python" -c "import cv2; from headpose import PoseEstimator; from freefield.cameras import WebCams"
+
+      - name: Check distribution metadata and build documentation
+        if: matrix.python-version == '3.12'
+        run: |
+          python -m pip install twine -r docs/requirements.txt
+          python -m twine check --strict dist/*
+          python -m sphinx -b html -W --keep-going docs "$RUNNER_TEMP/freefield-docs"

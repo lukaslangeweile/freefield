@@ -93,7 +93,7 @@ def test_apply_equalization_applies_level_to_copy(
         samplerate=48828,
     )
     signal.level = 40
-    equalization_speaker.level = 65
+    equalization_speaker.level = 25
 
     # Act
     result = ff.apply_equalization(
@@ -252,7 +252,7 @@ def test_apply_equalization_applies_level_and_frequency_filter(
 
     signal.level = 40
 
-    equalization_speaker.level = 65
+    equalization_speaker.level = 25
 
     equalization_speaker.filter = slab.Filter(
         data=np.array([0.5]),

@@ -22,10 +22,10 @@ Runs a Localisation Test for speakers across the azimuth of the dome setup. ::
     )
 
     # Select loudspeakers located in the horizontal plane.
-    speakers = [
-        speaker for speaker in speakers
+    speakers = freefield.pick_speakers([
+        speaker.index for speaker in freefield.read_speaker_table()
         if speaker.elevation == 0
-    ]
+    ])
 
     # Create a randomized trial sequence.
     n_reps = 4

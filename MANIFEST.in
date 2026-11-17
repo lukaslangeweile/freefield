@@ -1,7 +1,1 @@
-include README.txt
-include freefield_toolbox/speakertable_arc.txt
-include freefield_toolbox/speakertable_dome.txt
-include freefield_toolbox/calib.jpg
-include freefield_toolbox/shape_predictor_68_face_landmarks.dat
-include freefield_toolbox/button_response.rcx
-include example/*
+include README.md LICENSE.txt
